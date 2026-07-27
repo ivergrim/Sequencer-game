@@ -1,4 +1,5 @@
 import { getContext, getNoiseBuffer, getStemBus } from './context';
+import { Ab2, Ab3, Ab4, C3, C4, C5, Db_MAJOR, F1, F2, F4, F_MINOR } from './key';
 
 /**
  * Backing layers.
@@ -17,22 +18,6 @@ import { getContext, getNoiseBuffer, getStemBus } from './context';
 const SILENT = 0.0001;
 
 type BarScheduler = (barStart: number, stepDuration: number, out: AudioNode) => void;
-
-/** F minor. The fallback bed and every substitute layer sit in this key. */
-const F1 = 43.65;
-const F2 = 87.31;
-const Ab2 = 103.83;
-const C3 = 130.81;
-const F3 = 174.61;
-const Ab3 = 207.65;
-const C4 = 261.63;
-const Db4 = 277.18;
-const F4 = 349.23;
-const Ab4 = 415.3;
-const C5 = 523.25;
-
-const F_MINOR = [F3, Ab3, C4];
-const Db_MAJOR = [Db4, F4, Ab4];
 
 interface ToneOptions {
   time: number;

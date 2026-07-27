@@ -134,9 +134,21 @@ const VOICES: Record<Instrument, (time: number, out: AudioNode) => void> = {
   crash,
 };
 
-/** Schedule one hit at an absolute audio-clock time. */
-export function triggerDrum(instrument: Instrument, time: number): void {
-  VOICES[instrument](time, getDrumBus());
+/**
+ * Schedule one hit at an absolute audio-clock time.
+ *
+ * `level` scales this one hit without touching the bus: the audition a placed note
+ * plays is the real voice, only quieter than the pattern it is joining.
+ */
+export function triggerDrum(instrument: Instrument, time: number, level = 1): void {
+  let out: AudioNode = getDrumBus();
+  if (level !== 1) {
+    const gain = getContext().createGain();
+    gain.gain.value = level;
+    gain.connect(out);
+    out = gain;
+  }
+  VOICES[instrument](time, out);
 }
 
 /**

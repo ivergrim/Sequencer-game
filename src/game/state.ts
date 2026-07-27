@@ -83,6 +83,12 @@ export interface Failure {
 export interface StateEvents {
   /** The collision: drives the death camera and the ground marker. */
   onFail?: (failure: Failure) => void;
+  /**
+   * A run decided a success, fired at the decision. `flourishTime` is the audio time
+   * the success flourish begins on — the bar line after the run bar — so a cue can be
+   * scheduled onto it sample-accurately, ahead of time like all audio here.
+   */
+  onSuccess?: (flourishTime: number) => void;
   /** The bar line where the next stage's obstacles rise into the world. */
   onStageAdvance?: (stageIndex: number) => void;
   /** A note placed with zero budget remaining. */
@@ -409,6 +415,12 @@ export class GameState {
     this.runPattern = clonePattern(this.pattern);
     this.runResult = simulate(this.obstacles, this.runPattern, this.chapter.patternLength);
     this.phase = 'running';
+
+    // A decided success is irrevocable, so the flourish cue can be scheduled now,
+    // onto the bar line where the flourish will begin.
+    if (this.runResult.ok) {
+      this.events.onSuccess?.(this.transport.timeOfBar(this.runBar + 1));
+    }
   }
 
   private fail(step: number, instrument: Instrument, collisionStep: number): void {

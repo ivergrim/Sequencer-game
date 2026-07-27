@@ -1,6 +1,7 @@
 import './style.css';
 
 import { getDrumBus, getLimiter, getStemBus, unlockAudio } from './audio/context';
+import { triggerFailThud, triggerSuccessSting } from './audio/cues';
 import { triggerCountIn, triggerDrum } from './audio/drums';
 import { Stems } from './audio/stems';
 import { Transport } from './audio/transport';
@@ -60,7 +61,10 @@ async function start(): Promise<void> {
 
   const state = new GameState(chapter, transport, {
     // Nothing happens in the sequencer on failure. The stage's death camera is the
-    // whole of the feedback, by design.
+    // whole of the visible feedback, by design; the thud lands where the missing drum
+    // hit would have, at the exact audio time of the collision step.
+    onFail: (failure) => triggerFailThud(transport.timeOfStep(failure.collisionStep)),
+    onSuccess: (flourishTime) => triggerSuccessSting(flourishTime, transport.stepDuration),
     onStageAdvance: (index) => {
       // The next stage's obstacles rise into the world on this bar line.
       for (const obstacle of chapter.stages[index]!.obstacles) {
@@ -74,7 +78,15 @@ async function start(): Promise<void> {
     sequencerHost,
     chapter.rows,
     chapter.patternLength,
-    (instrument, step) => state.toggle(instrument, step),
+    (instrument, step) => {
+      const wasOn = state.pattern[instrument][step] === true;
+      state.toggle(instrument, step);
+      // Audition a note the moment it is placed, quietly, so the ear learns which
+      // sound it just committed to without waiting for the playhead to come around.
+      if (!wasOn && state.pattern[instrument][step] === true) {
+        triggerDrum(instrument, transport.now + 0.005, 0.45);
+      }
+    },
   );
 
   const renderObstacles: RenderObstacle[] = [];
