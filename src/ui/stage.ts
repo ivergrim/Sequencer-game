@@ -362,7 +362,7 @@ export class StageRenderer {
       // read against the beat ruler. Nothing new is drawn and no step is named — the
       // scenery that was always the ruler just stays legible while the camera holds.
       if (frame.hint) {
-        this.drawScenery(frame, stepFloat, cell, dinoX, w);
+        this.drawScenery(frame, stepFloat, cell, dinoX, w, LIGHT);
         this.drawImpactZone(dinoX);
       }
 
@@ -434,19 +434,26 @@ export class StageRenderer {
 
   // ----------------------------------------------------------------- scenery
 
-  /** Four elements per bar, on the quarter notes only. Never on sixteenths. */
+  /**
+   * Four elements per bar, on the quarter notes only. Never on sixteenths.
+   *
+   * `ink` exists for the death camera's hint, which redraws these over the dim: at
+   * their usual weight they would come back barely stronger than the dimmed stage, and
+   * reading the culprit against them is the whole point of putting them back.
+   */
   private drawScenery(
     frame: StageFrame,
     stepFloat: number,
     cell: number,
     dinoX: number,
     w: number,
+    ink: string = SOFT,
   ): void {
     const { g } = this;
     for (let quarter = 0; quarter < 4; quarter++) {
       const step = (quarter * frame.patternLength) / 4;
       this.eachWrap(step, stepFloat, frame.patternLength, cell, dinoX, w, (x) => {
-        g.fillStyle = SOFT;
+        g.fillStyle = ink;
         // The downbeat's cloud sits higher and wider, so the bar line is findable.
         const downbeat = quarter === 0;
         cloud(g, x, downbeat ? 20 : 38 + (quarter % 2) * 10, downbeat ? 1.25 : 1);

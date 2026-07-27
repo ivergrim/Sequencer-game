@@ -46,15 +46,28 @@ world never stop across ten stage transitions, and that nothing drifts. Both run
 the dev server in a real Chromium.
 
 ```sh
-npm run dev                # in one terminal
-npm run test:e2e           # in another: plays stage 1 through 10
-npm run test:e2e:drift     # five minutes, then measures alignment
-npm run test:e2e:patch1    # the patch 1 acceptance criteria
+npm run dev                 # in one terminal
+npm run test:e2e            # in another: plays stage 1 through 10
+npm run test:e2e:drift      # five minutes, then measures alignment
+npm run test:e2e:patch1     # the patch 1 acceptance criteria
+npm run test:e2e:responsive # desktop and phone viewports, touch controls
+npm run test:e2e:shots      # captures stage art at several stages, for eyeballing
 ```
 
 `test:e2e` plays the whole chapter by clicking real cells, and checks the budget
 rejection, row locking, that a committed note cannot be removed, and that the transport is
-never restarted and never stalls.
+never restarted and never stalls. It ends in free play: the world emptying, the grid
+unlocking, the budget lifting, runs retiring, and the whole thing surviving a reload.
+
+`test:e2e:responsive` drives a 1100px desktop and a 390px phone, checking that nothing
+overflows, that the canvas backing store matches its CSS box at each device pixel ratio,
+and that a note can be placed, run and cleared entirely by tapping.
+
+Every suite clears `localStorage` before starting, so a run always begins at stage 1
+whatever the last one left behind.
+
+`test/e2e/hint-shot.mjs` is a look rather than a check: it fails the same stage three
+times and captures the death camera on either side of the hint threshold.
 
 `test:e2e:drift` fills the pattern so a hit lands on every step, then records how far the
 derived `stepFloat` sits from the step each hit was scheduled to sound on. That one number
@@ -95,7 +108,12 @@ Connect **Workers Builds** to this GitHub repo so pushes deploy without manual s
 
 1. Cloudflare dashboard → Workers & Pages → the `sequencer-game` worker → Settings → Builds
 2. Connect the GitHub repository
-3. Build command `npm run build`, deploy command `npx wrangler deploy`, root directory `/`
+3. Build command `npm test && npm run build`, deploy command `npx wrangler deploy`, root
+   directory `/`
+
+The build command runs the unit suite first on purpose: a push to `main` deploys
+straight to production, so the tests are the last gate before it. `.github/workflows/ci.yml`
+runs the same checks on every branch and pull request.
 
 Pushes to `main` then deploy to production and other branches get preview URLs, which
 is useful for trying alternative stage layouts without touching the live build.
@@ -149,10 +167,19 @@ On Looperman, filter by a single BPM and key so the layers stack.
 
 | Input | Action |
 |---|---|
-| Click a cell | Toggle a note |
-| Space | Run |
+| Click or tap a cell | Toggle a note, and hear it |
+| Space, or the run button | Run |
 | R | Retry |
-| Escape | Clear this stage's notes (committed ones stay) |
+| Escape, or the clear button | Clear this stage's notes (committed ones stay) |
+| Restart chapter | Wipe the save and start over — asks twice |
+
+Every input has a button as well as a key, so the game is playable on a phone. The
+keyboard hints hide themselves on touch devices, and the run button retires in free
+play.
+
+Progress is saved continuously to `localStorage` and restored on load. A save from an
+older build, or a corrupted one, is discarded rather than trusted, so an incompatible
+save costs a fresh start and nothing worse.
 
 ## Architecture
 
@@ -160,24 +187,30 @@ On Looperman, filter by a single BPM and key so the layers stack.
 src/
   main.ts            entry, wiring, game loop
   audio/
-    context.ts       AudioContext singleton, unlock on first gesture
+    context.ts       AudioContext singleton, unlock and stay-alive
     transport.ts     master clock, lookahead scheduler, step events
     drums.ts         synthesized drum voices
+    key.ts           the chapter's key, shared by every tonal voice
+    cues.ts          failure thud and stage-clear sting
     stems.ts         backing layer loading and playback
   game/
     types.ts
     chapter1.ts      chapter data
     simulate.ts      pure run resolver
     state.ts         state machine
+    save.ts          progress persistence and save validation
   ui/
     sequencer.ts     step grid
+    controls.ts      run, clear and restart buttons
     stage.ts         canvas renderer
 ```
 
-Add `test/reaction.test.ts` to the unit suite: it pins the obstacle reaction's onset to
-the moment an obstacle reaches the launch position.
+`test/reaction.test.ts` pins the obstacle reaction's onset to the moment an obstacle
+reaches the launch position; `test/state.test.ts` and `test/save.test.ts` drive the state
+machine against a hand-cranked clock from `test/helpers.ts`, covering the run snapshot,
+the failure hint, free play and the save round-trip.
 
-Four commitments hold the whole thing up:
+Five commitments hold the whole thing up:
 
 **One clock.** `AudioContext.currentTime` is the only source of truth. Nothing
 accumulates time in a `requestAnimationFrame` loop and nothing uses `Date.now()` for
@@ -206,6 +239,17 @@ backwards motion.
 this repo. At step N an obstacle either requires instrument I or it does not, and the
 pattern at step N either contains I or does not. The run outcome is computed in full
 before the animation starts; the animation presents an already-decided result.
+
+**The run bar is played from a snapshot.** The outcome being decided in advance is only
+half of the guarantee — the performance has to come from the same pattern the decision
+did. `RUN_DECISION_LEAD` (300ms) before the run bar, the pattern is frozen, the outcome
+simulated from the frozen copy, and the run bar's drum audio and character animations
+both read it. The lead is not decoration: the audio scheduler hands out the bar's first
+steps 100ms early and step 0's animation starts 144ms early, so deciding at the bar line
+would leave a window in which an edit could change an outcome that had already begun
+performing. Edits during the count-in still count, and the live pattern is audible again
+the moment the run resolves. Without this, removing a note mid-run left the character
+running through a pillar on a run that still cleared.
 
 ### Reading the stage
 
@@ -247,6 +291,12 @@ Once the chapter is cleared there is nothing left to solve, so the character sta
 stage and performs the finished track for good — no exit, no empty stage, and no obstacle
 still marked as the current stage's business.
 
+Clearing stage 10 opens **free play**: the obstacles sink back out of the world the way
+they rose in, every lock lifts, the budget goes, and runs retire because there is nothing
+left to run against. What is left is the finished track as an instrument — the full
+backing mix underneath, the player's pattern editable live on top, and the character
+performing whatever they make of it.
+
 The two depth systems below stay deliberately independent, so they can never multiply and
 bury the oldest small obstacles:
 
@@ -281,6 +331,26 @@ step S is at the launch position exactly when `stepFloat` is S, so how far it is
 reaction is just the wrapped difference. Nothing is scheduled, it repeats every bar for
 free, and it inherits the transport's immunity to drift. `test/reaction.test.ts` pins the
 onset to the crossing.
+
+Placing a note also **auditions it**, quietly, at the moment of the click. Waiting for
+the playhead to come round is up to two seconds of doubt about what was just committed
+to, and hearing the voice on placement is the instrument-to-sound binding the game
+exists to teach.
+
+### When a player gets stuck
+
+The sequencer never names the failed step — the stage says *which obstacle*, and working
+out *which step* from its position against the quarter-note landmarks is the skill being
+taught. That principle needs a floor under it, though, or a player who cannot make the
+translation has nothing coming.
+
+After `HINT_AFTER_FAILURES` (3) consecutive failures on one stage, the death camera also
+holds the landmarks and the launch patch up out of the dim, drawn at the ground litter's
+weight rather than the sky's so they actually read against the dimmed stage. Nothing new
+is drawn and no step is named: the ruler that was always there simply stays legible while
+the camera holds, and the search narrows from sixteen steps to a position relative to a
+visible beat. The streak resets when the stage clears, so the help never outlives the
+trouble that earned it.
 
 ### Actions
 
@@ -342,6 +412,20 @@ A stage can stack several voices on one step by design — by stage 10 a kick, a
 an open hat all land on step 12 — so the limiter is there to keep the sum under one
 rather than to shape the sound.
 
+Two moments outside the pattern have voices of their own, in `cues.ts`: a low thud on
+collision, scheduled at the exact audio time of the collision step where the missing
+drum hit would have been, and a rising triad on a stage clear, scheduled onto the bar
+line the flourish begins on. Both are built from the chapter's key in `key.ts`, which
+the synthesized backing bed also draws from, so a cue can never land out of key with
+what is playing under it. Like the count-in tick they are UI sounds, not instruments,
+and can never be sequenced.
+
+The context is also kept alive for the life of the session. Browsers suspend an
+`AudioContext` on backgrounding, phone calls and output-device changes, and a suspended
+context freezes `currentTime` — which freezes the whole game, since every position
+derives from that one clock. `installResume()` watches for the tab returning, the
+context announcing its own state change, and any fresh gesture.
+
 ### Known limitation
 
 Browsers throttle `setInterval` to roughly once a second in a background tab while the
@@ -357,11 +441,11 @@ scheduler into an `AudioWorklet` or a `Worker`, which is beyond this prototype.
 | 1 | Runs and makes sound with `public/stems/` empty | `test:e2e` taps the drum and stem buses and asserts signal on both |
 | 2 | No drift after five minutes | `test:e2e:drift` |
 | 3 | Stage 3 clears only with kick on 0, 4, 8, 12 | `test/chapter1.test.ts` |
-| 4 | Removing a carried-over note fails at that step | `test/simulate.test.ts` and `test:e2e` |
+| 4 | Removing a carried-over note fails at that step | `test/simulate.test.ts` and `test:e2e`, which forces it at stage 10 — the last point before free play unlocks the grid |
 | 5 | The budget blocks over-placing | `test:e2e` |
 | 6 | Music and scroll never stop, stage 1 to 10 | `test:e2e` monitors the transport for the whole session |
 | 7 | `simulate()` is pure and unit tested | `test/simulate.test.ts` |
-| 8 | No hitbox or physics code | `grep -rniE "hitbox\|intersect\|collide\|bounding\|physics\|velocity\|gravity" src/` |
+| 8 | No hitbox or physics code | `grep -rniE "hitbox\|intersect\|collide\|physics\|velocity\|gravity" src/` — the only hits are comments saying there is none, plus `impulse()`'s note that it is ballistic rather than sinusoidal |
 | 9 | `wrangler deploy` produces a working URL | Needs Cloudflare credentials; `npx wrangler deploy --dry-run` validates the config without them |
 | 10 | A push to `main` deploys | Needs Workers Builds connected in the dashboard, see above |
 

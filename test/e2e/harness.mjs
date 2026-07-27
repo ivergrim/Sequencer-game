@@ -27,6 +27,10 @@ export async function openGame() {
   });
 
   await page.goto(URL, { waitUntil: 'networkidle' });
+  // Progress is saved now, so without this every suite would resume wherever the last
+  // one stopped. Cleared after navigation and before the game starts, which is when
+  // the save is read.
+  await page.evaluate(() => localStorage.clear());
   await page.click('#start');
   await page.waitForFunction(() => window.__debug?.transport?.started === true, null, {
     timeout: 10_000,

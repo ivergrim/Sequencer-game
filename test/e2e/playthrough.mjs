@@ -128,6 +128,70 @@ await installMonitor();
   });
 }
 
+/**
+ * Committed notes are frozen, and breaking one fails at that step.
+ *
+ * Run while stage 10 is solved but not yet cleared: that is the last moment either can
+ * be observed. Clearing stage 10 ends the chapter, and free play unlocks the whole
+ * grid and retires runs altogether.
+ */
+async function auditCommittedNotes() {
+  const before = await snapshot();
+  const inert = await page.evaluate(() => {
+    const cell = document.querySelector(
+      '.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]',
+    );
+    return {
+      committed: cell.classList.contains('committed'),
+      disabled: cell.getAttribute('aria-disabled') === 'true',
+      pointerEvents: getComputedStyle(cell).pointerEvents,
+    };
+  });
+  // force, because the cell deliberately takes no pointer events at all.
+  await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]', { force: true });
+  const after = await snapshot();
+
+  check(
+    'a committed note is marked committed and inert',
+    inert.committed && inert.disabled,
+    JSON.stringify(inert),
+  );
+  check('it does not take pointer events', inert.pointerEvents === 'none', inert.pointerEvents);
+  check('a committed note cannot be removed', after.used === before.used, `${before.used} -> ${after.used}`);
+
+  // Reach past the UI to force the failure the renderer still has to handle.
+  await page.evaluate(() => {
+    window.__debug.state.pattern.kick[8] = false;
+  });
+  const removed = await snapshot();
+  check('the pattern can still be broken from outside the UI', removed.used === 20, `${removed.used}`);
+
+  await runAndSettle(page);
+  const failed = await snapshot();
+  check(
+    'removing a carried-over note fails at that step',
+    failed.failure?.step === 8 && failed.failure?.missing === 'kick',
+    JSON.stringify(failed.failure),
+  );
+  // Patch 1 C1: FAILED holds for the death camera before releasing, rather than
+  // returning to EDITING on the next frame.
+  check('the death camera holds on the failure', failed.phase === 'failed');
+  check('editing is never locked, even under the camera', failed.editableDuringCamera === true);
+
+  await page.waitForFunction(() => window.__debug.state.phase === 'editing', null, {
+    timeout: 10_000,
+  });
+  check('the death camera releases to EDITING on its own', (await snapshot()).phase === 'editing');
+
+  const marker = await page.evaluate(() => window.__debug.state.failure !== null);
+  check('the failure marker stays on the ground', marker === true);
+
+  // Put it back the way it was broken: the grid cannot restore a committed note.
+  await page.evaluate(() => {
+    window.__debug.state.pattern.kick[8] = true;
+  });
+}
+
 // ------------------------------------------------------------- play all ten stages
 const seen = [];
 for (let stage = 1; stage <= 10; stage++) {
@@ -145,6 +209,8 @@ for (let stage = 1; stage <= 10; stage++) {
     armed.budget === armed.obstacles,
     `${armed.budget} vs ${armed.obstacles}`,
   );
+
+  if (stage === 10) await auditCommittedNotes();
 
   await runAndSettle(page);
   const after = await snapshot();
@@ -177,55 +243,61 @@ check(
   (await snapshot()).unlocked.join(','),
 );
 
-// ------------------------------ committed notes are frozen, and an unsolved run fails
+// --------------------------------------------------------------------- free play
 {
-  // Every note is committed by now, so clicking one does nothing. This is what replaces
-  // the old "remove a carried-over note" failure: solved stages cannot be broken.
-  const before = await snapshot();
-  const inert = await page.evaluate(() => {
-    const cell = document.querySelector(
+  // The obstacles sink back out over RISE_SECONDS; give them the time and then some.
+  await page.waitForTimeout(1_200);
+
+  const free = await page.evaluate(() => {
+    const { state, renderObstacles } = window.__debug;
+    const committed = document.querySelector(
       '.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]',
     );
     return {
-      committed: cell.classList.contains('committed'),
-      disabled: cell.getAttribute('aria-disabled') === 'true',
-      pointerEvents: getComputedStyle(cell).pointerEvents,
+      obstaclesOnStage: renderObstacles.length,
+      obstaclesInData: state.obstacles.length,
+      anyLocked: window.__debug.chapter.rows.some((row) =>
+        state.pattern[row].some((_, step) => state.isLocked(row, step)),
+      ),
+      committedClass: committed.classList.contains('committed'),
+      unlockedRows: [...state.unlockedRows].length,
+      lockedRows: document.querySelectorAll('.seq-row.locked').length,
+      used: state.used,
+      status: document.querySelector('.seq-status').textContent,
+      budgetText: document.querySelector('.seq-budget').textContent,
+      runHidden: document.querySelector('#run').hidden,
     };
   });
-  // force, because the cell deliberately takes no pointer events at all.
-  await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]', { force: true });
-  const after = await snapshot();
 
-  check('a committed note is marked committed and inert', inert.committed && inert.disabled, JSON.stringify(inert));
-  check('it does not take pointer events', inert.pointerEvents === 'none', inert.pointerEvents);
-  check('a committed note cannot be removed', after.used === before.used, `${before.used} -> ${after.used}`);
-
-  // Reach past the UI to force the failure the renderer still has to handle.
-  await page.evaluate(() => {
-    window.__debug.state.pattern.kick[8] = false;
-  });
-  const removed = await snapshot();
-  check('the pattern can still be broken from outside the UI', removed.used === 20);
-
-  await runAndSettle(page);
-  const failed = await snapshot();
+  check('the world empties of obstacles', free.obstaclesOnStage === 0, `${free.obstaclesOnStage} left`);
   check(
-    'removing a carried-over note fails at that step',
-    failed.failure?.step === 8 && failed.failure?.missing === 'kick',
-    JSON.stringify(failed.failure),
+    'the chapter data still holds all twenty-one',
+    free.obstaclesInData === 21,
+    `${free.obstaclesInData}`,
   );
-  // Patch 1 C1: FAILED now holds for the death camera before releasing, rather than
-  // returning to EDITING on the next frame.
-  check('the death camera holds on the failure', failed.phase === 'failed');
-  check('editing is never locked, even under the camera', failed.editableDuringCamera === true);
+  check('nothing is locked any more', free.anyLocked === false);
+  check('and no cell still renders as committed', free.committedClass === false);
+  check('every row is playable', free.unlockedRows === 5 && free.lockedRows === 0);
+  check('the finished track survives the unlock', free.used === 21, `${free.used} notes`);
+  check('the status reads free play', free.status === 'free play', `"${free.status}"`);
+  check('the budget readout becomes a note count', free.budgetText === '21 notes', free.budgetText);
+  check('the run button is gone', free.runHidden === true);
 
-  await page.waitForFunction(() => window.__debug.state.phase === 'editing', null, {
-    timeout: 10_000,
-  });
-  check('the death camera releases to EDITING on its own', (await snapshot()).phase === 'editing');
+  // The budget is lifted: a note nothing ever required can now be placed.
+  await page.click('.seq-row[data-instrument="crash"] .seq-cell[data-step="9"]');
+  const added = await page.evaluate(() => window.__debug.state.used);
+  check('notes can be placed past the old budget', added === 22, `${added}`);
 
-  const marker = await page.evaluate(() => window.__debug.state.failure !== null);
-  check('the failure marker stays on the ground', marker === true);
+  // And a formerly committed note can be taken out again.
+  await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]');
+  const removed = await page.evaluate(() => window.__debug.state.used);
+  check('a formerly committed note can be removed', removed === 21, `${removed}`);
+
+  // Runs are retired: there is nothing to run against.
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(400);
+  const stillEditing = await page.evaluate(() => window.__debug.state.phase);
+  check('run does nothing in free play', stillEditing === 'editing', stillEditing);
 }
 
 // -------------------------------------- the transport never stopped, start to finish
@@ -288,6 +360,45 @@ check(
     level.out > 0.01 && level.out <= 1,
     `peak ${level.out.toFixed(3)}`,
   );
+}
+
+// ---------------------------------------- progress survives a reload
+//
+// Last, because reloading discards the transport monitor and the audio graph the
+// checks above are measuring.
+{
+  const before = await page.evaluate(() =>
+    JSON.parse(JSON.stringify(window.__debug.state.pattern)),
+  );
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.click('#start');
+  await page.waitForFunction(() => window.__debug?.transport?.started === true, null, {
+    timeout: 10_000,
+  });
+  await page.waitForTimeout(300);
+
+  const after = await page.evaluate(() => ({
+    complete: window.__debug.state.complete,
+    used: window.__debug.state.used,
+    pattern: JSON.parse(JSON.stringify(window.__debug.state.pattern)),
+    obstaclesOnStage: window.__debug.renderObstacles.length,
+  }));
+
+  check('a reload restores the completed chapter', after.complete === true);
+  check(
+    'the pattern survives the reload exactly',
+    JSON.stringify(after.pattern) === JSON.stringify(before),
+    `${after.used} notes`,
+  );
+  check(
+    'a restored free play has an empty world',
+    after.obstaclesOnStage === 0,
+    `${after.obstaclesOnStage}`,
+  );
+
+  // Leave no save behind: the next run of this suite must start from stage 1.
+  await page.evaluate(() => localStorage.clear());
 }
 
 check('no unexpected console errors', errors.length === 0, errors.join(' | '));

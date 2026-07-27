@@ -31,6 +31,9 @@ for (const viewport of VIEWPORTS) {
   });
   const page = await context.newPage();
   await page.goto(URL, { waitUntil: 'networkidle' });
+  // This suite builds its own context rather than using openGame, so it clears the
+  // saved progress the same way: the checks below assume stage 1.
+  await page.evaluate(() => localStorage.clear());
   await page.click('#start');
   await page.waitForFunction(() => window.__debug?.transport?.started === true, null, {
     timeout: 10_000,
