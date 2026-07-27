@@ -24,12 +24,12 @@ export interface Failure {
 }
 
 export interface StateEvents {
-  onPhaseChange?: (phase: Phase, previous: Phase) => void;
+  /** The collision: drives the stumble, the ground marker and the cell flash. */
   onFail?: (failure: Failure) => void;
-  onSuccess?: () => void;
+  /** The bar line where the next stage's obstacles rise into the world. */
   onStageAdvance?: (stageIndex: number) => void;
+  /** A note placed with zero budget remaining. */
   onBudgetReject?: () => void;
-  onPatternChange?: () => void;
 }
 
 export class GameState {
@@ -123,7 +123,6 @@ export class GameState {
     }
 
     lane[step] = !lane[step];
-    this.events.onPatternChange?.();
   }
 
   /** Escape: clear every note in the unlocked, currently editable rows. */
@@ -134,7 +133,6 @@ export class GameState {
       if (!unlocked.has(instrument)) continue;
       this.pattern[instrument].fill(false);
     }
-    this.events.onPatternChange?.();
   }
 
   /** The hits on a step, for the scheduler and for the character's actions. */
@@ -163,7 +161,7 @@ export class GameState {
     this.countInBar = this.transport.nextBarBoundary(this.transport.now + 0.15);
     this.runBar = this.countInBar + 1;
     this.runResult = null;
-    this.setPhase('armed');
+    this.phase = 'armed';
   }
 
   /**
@@ -180,7 +178,7 @@ export class GameState {
       case 'failed':
         // Held for a single frame. The stumble, the ground marker and the cell flash
         // outlive it; editing is unlocked already.
-        this.setPhase('editing');
+        this.phase = 'editing';
         break;
 
       case 'armed':
@@ -193,8 +191,7 @@ export class GameState {
         if (result.ok) {
           if (barFloat >= this.runBar + 1) {
             this.advanceAtBar = this.runBar + 2;
-            this.setPhase('success');
-            this.events.onSuccess?.();
+            this.phase = 'success';
           }
         } else {
           const collision = this.runBar * this.chapter.patternLength + result.failStep;
@@ -210,12 +207,6 @@ export class GameState {
       case 'editing':
         break;
     }
-  }
-
-  /** Progress through the run bar, 0..1. Drives the character's exit and the run readout. */
-  get runProgress(): number {
-    if (this.phase !== 'running') return 0;
-    return Math.min(1, Math.max(0, this.transport.barFloat - this.runBar));
   }
 
   /** Progress through the success flourish, 0..1. Drives the character's exit. */
@@ -237,13 +228,13 @@ export class GameState {
     // The outcome is computed in full before any of it animates. The animation
     // presents an already-decided result.
     this.runResult = simulate(this.obstacles, this.pattern, this.chapter.patternLength);
-    this.setPhase('running');
+    this.phase = 'running';
   }
 
   private fail(step: number, instrument: Instrument): void {
     this.failure = { step, instrument, at: this.transport.now };
     this.runResult = null;
-    this.setPhase('failed');
+    this.phase = 'failed';
     this.events.onFail?.(this.failure);
   }
 
@@ -256,13 +247,6 @@ export class GameState {
       this.stageIndex++;
       this.events.onStageAdvance?.(this.stageIndex);
     }
-    this.setPhase('editing');
-  }
-
-  private setPhase(phase: Phase): void {
-    if (phase === this.phase) return;
-    const previous = this.phase;
-    this.phase = phase;
-    this.events.onPhaseChange?.(phase, previous);
+    this.phase = 'editing';
   }
 }
