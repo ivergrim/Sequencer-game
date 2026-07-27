@@ -3,7 +3,7 @@ import { MAX_LEAD_SECONDS } from './actions';
 import { activeObstacles, activeStems, noteBudget } from './chapter1';
 import { requiredInstruments, simulate } from './simulate';
 import type { Chapter, Instrument, Obstacle, Pattern, Result } from './types';
-import { countNotes, emptyPattern } from './types';
+import { clonePattern, countNotes, emptyPattern } from './types';
 
 /**
  * The run state machine.
@@ -35,6 +35,23 @@ export const DEATH_CAMERA = {
   /** Total time the stage stays under the camera. */
   total: 1.6,
 };
+
+/**
+ * How long before the run bar the run's pattern is fixed and its outcome decided.
+ *
+ * The moment of truth cannot be the bar line itself. The audio scheduler hands out the
+ * run bar's first steps up to 100ms before the bar begins, and step 0's animation starts
+ * `MAX_LEAD_SECONDS` (144ms) before it, so by the time the bar line arrives the run has
+ * already been partly performed. Deciding at the bar line would let an edit land in that
+ * window and change the outcome after its own audio and animation had fired — the one
+ * thing the design forbids is the presentation contradicting the decided result.
+ *
+ * So the snapshot is taken this far ahead, comfortably outside both leads, and the whole
+ * run bar — outcome, drum audio and animations alike — is played from it. Edits during
+ * the count-in still count right up to this moment, and the live pattern is audible again
+ * the instant the run bar ends.
+ */
+export const RUN_DECISION_LEAD = 0.3;
 
 /** Fraction of the count-in bar the character spends arriving out of the distance. */
 const ENTRY_FRACTION = 0.32;
@@ -100,6 +117,14 @@ export class GameState {
   /** Set when a run is decided a success, so the scheduler can bring the stem in on time. */
   private advanceAtBar: number | null = null;
   private runResult: Result | null = null;
+  /**
+   * The pattern as it stood at the run decision, `RUN_DECISION_LEAD` before the run bar.
+   *
+   * The run bar is performed entirely from this snapshot — outcome, drum audio and
+   * animations — so a live edit during the run can never contradict the decided result.
+   * Null outside a run; every other bar plays the live pattern.
+   */
+  private runPattern: Pattern | null = null;
 
   constructor(chapter: Chapter, transport: Transport, events: StateEvents = {}) {
     this.chapter = chapter;
@@ -198,13 +223,25 @@ export class GameState {
     }
   }
 
-  /** The hits on a step, for the scheduler and for the character's actions. */
-  hitsAt(stepInBar: number): Instrument[] {
+  /**
+   * The hits on a step, for the scheduler and for the character's actions.
+   *
+   * `bar` selects the pattern source: the run bar reads the snapshot taken at the run
+   * decision, every other bar reads the live pattern. Callers that pass no bar always
+   * read live.
+   */
+  hitsAt(stepInBar: number, bar?: number): Instrument[] {
     const hits: Instrument[] = [];
     for (const instrument of this.chapter.rows) {
-      if (this.pattern[instrument][stepInBar]) hits.push(instrument);
+      if (this.laneFor(instrument, bar)[stepInBar]) hits.push(instrument);
     }
     return hits;
+  }
+
+  /** The lane a given absolute bar plays from: the run snapshot for the run bar, live otherwise. */
+  laneFor(instrument: Instrument, bar?: number): readonly boolean[] {
+    const source = this.runPattern !== null && bar === this.runBar ? this.runPattern : this.pattern;
+    return source[instrument];
   }
 
   // ---------------------------------------------------------------- run cycle
@@ -225,6 +262,7 @@ export class GameState {
     this.countInBar = this.transport.nextBarBoundary(this.transport.now + 0.15);
     this.runBar = this.countInBar + 1;
     this.runResult = null;
+    this.runPattern = null;
     this.phase = 'armed';
   }
 
@@ -248,7 +286,8 @@ export class GameState {
         break;
 
       case 'armed':
-        if (barFloat >= this.runBar) this.startRun();
+        // The decision moment, not the bar line: see RUN_DECISION_LEAD.
+        if (this.transport.now >= this.runBarTime - RUN_DECISION_LEAD) this.startRun();
         break;
 
       case 'running': {
@@ -257,6 +296,7 @@ export class GameState {
         if (result.ok) {
           if (barFloat >= this.runBar + 1) {
             this.advanceAtBar = this.runBar + 2;
+            this.runPattern = null;
             this.phase = 'success';
           }
         } else {
@@ -354,7 +394,9 @@ export class GameState {
 
   /** Count-in beats remaining, 4..1, or null when not counting in. */
   get countInBeat(): number | null {
-    if (this.phase !== 'armed') return null;
+    // RUNNING is included because the run decision lands slightly before the bar line,
+    // and the final beat of the count-in must not vanish with it.
+    if (this.phase !== 'armed' && this.phase !== 'running') return null;
     const into = this.transport.barFloat - this.countInBar;
     if (into < 0 || into >= 1) return null;
     return 4 - Math.floor(into * 4);
@@ -362,8 +404,10 @@ export class GameState {
 
   private startRun(): void {
     // The outcome is computed in full before any of it animates. The animation
-    // presents an already-decided result.
-    this.runResult = simulate(this.obstacles, this.pattern, this.chapter.patternLength);
+    // presents an already-decided result, and the run bar is performed from the same
+    // snapshot the outcome was computed from.
+    this.runPattern = clonePattern(this.pattern);
+    this.runResult = simulate(this.obstacles, this.runPattern, this.chapter.patternLength);
     this.phase = 'running';
   }
 
@@ -379,6 +423,8 @@ export class GameState {
       collisionStep,
     };
     this.runResult = null;
+    // The live pattern is audible again through the death camera and beyond.
+    this.runPattern = null;
     this.phase = 'failed';
     this.events.onFail?.(this.failure);
   }

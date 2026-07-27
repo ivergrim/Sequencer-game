@@ -98,11 +98,15 @@ async function start(): Promise<void> {
 
     // The player's pattern is always audible, in every state. Editing is live: this
     // reads the pattern as it stands when the step is scheduled, so a toggle lands on
-    // the very next pass.
+    // the very next pass. The one exception is the run bar, which plays from the
+    // snapshot its outcome was decided from, so a mid-run edit cannot make the audio
+    // contradict the decided result.
     //
     // Audio only. The drum hit for step S fires at exactly stepTime(S); its animation
     // was started earlier, by the frame loop.
-    for (const instrument of state.hitsAt(event.stepInBar)) triggerDrum(instrument, event.time);
+    for (const instrument of state.hitsAt(event.stepInBar, event.bar)) {
+      triggerDrum(instrument, event.time);
+    }
   });
 
   transport.start();
@@ -154,9 +158,11 @@ async function start(): Promise<void> {
       const stepInBar = ((animCursor % chapter.patternLength) + chapter.patternLength) %
         chapter.patternLength;
       const stepTime = transport.timeOfStep(animCursor);
+      const bar = Math.floor(animCursor / chapter.patternLength);
 
       for (const instrument of chapter.rows) {
-        const lane = state.pattern[instrument];
+        // The run bar animates from the run snapshot, like its audio.
+        const lane = state.laneFor(instrument, bar);
         if (!lane[stepInBar]) continue;
         const { duration, lead } = actionTiming(
           instrument,
