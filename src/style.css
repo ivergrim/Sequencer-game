@@ -288,6 +288,33 @@ kbd {
   margin-right: 0.4em;
 }
 
+/* Restarting the chapter wipes the save, so the button sits apart from the hints and
+   asks twice. */
+#restart {
+  appearance: none;
+  -webkit-appearance: none;
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  padding: 0.1rem 0.6rem;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--line);
+  cursor: pointer;
+}
+
+#restart:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+#restart.armed {
+  color: var(--fail);
+  border-color: var(--fail);
+}
+
 /* ------------------------------------------------------------------ start */
 
 #start {

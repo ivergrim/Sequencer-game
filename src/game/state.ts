@@ -1,6 +1,7 @@
 import type { Transport } from '../audio/transport';
 import { MAX_LEAD_SECONDS } from './actions';
 import { activeObstacles, activeStems, noteBudget } from './chapter1';
+import type { SaveData } from './save';
 import { requiredInstruments, simulate } from './simulate';
 import type { Chapter, Instrument, Obstacle, Pattern, Result } from './types';
 import { clonePattern, countNotes, emptyPattern } from './types';
@@ -158,6 +159,34 @@ export class GameState {
   /** Whether this note was committed by an earlier stage and is now fixed. */
   isLocked(instrument: Instrument, step: number): boolean {
     return this.locked[instrument][step] === true;
+  }
+
+  // -------------------------------------------------------------- persistence
+
+  /** The whole of the durable state, cloned so the save never aliases live lanes. */
+  serialize(): SaveData {
+    return {
+      stageIndex: this.stageIndex,
+      complete: this.complete,
+      pattern: clonePattern(this.pattern),
+      locked: clonePattern(this.locked),
+    };
+  }
+
+  /**
+   * Apply a validated save. Meant for startup, before any run has been armed; it
+   * touches only the durable fields and leaves the phase machinery alone.
+   */
+  restore(data: SaveData): void {
+    this.stageIndex = data.complete ? this.chapter.stages.length - 1 : data.stageIndex;
+    this.complete = data.complete;
+    for (const row of this.chapter.rows) {
+      this.pattern[row] = [...data.pattern[row]];
+      // Free play holds no locks, whatever the save carried.
+      this.locked[row] = data.complete
+        ? new Array<boolean>(this.chapter.patternLength).fill(false)
+        : [...data.locked[row]];
+    }
   }
 
   // ---------------------------------------------------------------- stage data

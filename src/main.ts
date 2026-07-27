@@ -7,6 +7,7 @@ import { Stems } from './audio/stems';
 import { Transport } from './audio/transport';
 import { MAX_LEAD_SECONDS, actionTiming } from './game/actions';
 import { CHAPTER_1 } from './game/chapter1';
+import { clearProgress, loadProgress, saveProgress } from './game/save';
 import { requiredNotes } from './game/simulate';
 import { GameState } from './game/state';
 import type { Instrument } from './game/types';
@@ -70,14 +71,23 @@ async function start(): Promise<void> {
       for (const obstacle of chapter.stages[index]!.obstacles) {
         renderObstacles.push({ ...obstacle, stage: index, addedAt: transport.now });
       }
+      persist();
     },
     onComplete: () => {
       // Free play: the puzzle is over, so the world empties. Every obstacle sinks
       // back out the way it rose in; the frame loop prunes them once they are gone.
       for (const obstacle of renderObstacles) obstacle.removedAt = transport.now;
+      persist();
     },
     onBudgetReject: () => sequencer.shakeBudget(),
   });
+
+  // A refresh must not cost the player the chapter. Progress is written on every
+  // mutation and validated strictly on the way back in; a malformed or outdated save
+  // reads as a fresh start.
+  const persist = () => saveProgress(state.serialize());
+  const saved = loadProgress(chapter);
+  if (saved) state.restore(saved);
 
   const sequencer = new SequencerUI(
     sequencerHost,
@@ -86,6 +96,7 @@ async function start(): Promise<void> {
     (instrument, step) => {
       const wasOn = state.pattern[instrument][step] === true;
       state.toggle(instrument, step);
+      if (state.pattern[instrument][step] !== wasOn) persist();
       // Audition a note the moment it is placed, quietly, so the ear learns which
       // sound it just committed to without waiting for the playhead to come around.
       if (!wasOn && state.pattern[instrument][step] === true) {
@@ -128,12 +139,18 @@ async function start(): Promise<void> {
 
   transport.start();
 
-  // Stage 1's obstacles rise in as the first bar begins.
-  for (const obstacle of chapter.stages[0]!.obstacles) {
-    renderObstacles.push({ ...obstacle, stage: 0, addedAt: transport.timeOfBar(0) });
+  // Every stage reached so far rises in as the first bar begins - just stage 1 on a
+  // fresh start, everything active on a restored one. A completed chapter restores
+  // straight into free play, whose world is empty.
+  if (!state.complete) {
+    for (let i = 0; i <= state.stageIndex; i++) {
+      for (const obstacle of chapter.stages[i]!.obstacles) {
+        renderObstacles.push({ ...obstacle, stage: i, addedAt: transport.timeOfBar(0) });
+      }
+    }
   }
 
-  installControls(state);
+  installControls(state, persist);
 
   if (import.meta.env.DEV) {
     // Handle for the browser checks in test/e2e. Dev only, stripped from any build.
@@ -239,7 +256,7 @@ async function start(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-function installControls(state: GameState): void {
+function installControls(state: GameState, persist: () => void): void {
   window.addEventListener('keydown', (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
@@ -255,8 +272,43 @@ function installControls(state: GameState): void {
       case 'Escape':
         event.preventDefault();
         state.clearEditable();
+        persist();
         break;
     }
+  });
+
+  installRestart();
+}
+
+/**
+ * Restart the chapter: wipe the save and reload.
+ *
+ * The one deliberate reload in the game. The no-reload rule protects the run loop -
+ * nothing in play may stop the world - and abandoning the chapter is precisely the
+ * player leaving that loop. Destructive, so it takes two presses: the first arms the
+ * button for a few seconds, the second wipes.
+ */
+function installRestart(): void {
+  const button = document.querySelector<HTMLButtonElement>('#restart');
+  if (!button) return;
+  const idle = button.textContent;
+  let armed: number | null = null;
+
+  button.addEventListener('click', () => {
+    if (armed !== null) {
+      clearProgress();
+      location.reload();
+      return;
+    }
+    button.textContent = 'sure? press again';
+    button.classList.add('armed');
+    armed = window.setTimeout(() => {
+      armed = null;
+      button.textContent = idle;
+      button.classList.remove('armed');
+    }, 3000);
+    // Left focused, the next Space would re-trigger the button instead of running.
+    button.blur();
   });
 }
 
