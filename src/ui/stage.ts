@@ -249,8 +249,13 @@ export class StageRenderer {
    */
   resize(): void {
     const dpr = window.devicePixelRatio || 1;
-    const cssWidth = this.canvas.clientWidth || 960;
-    const cssHeight = this.canvas.clientHeight || STAGE_HEIGHT;
+    // The bounding rect, not clientWidth/clientHeight: those round to whole pixels, and
+    // a fluid box lands on fractions constantly. Rounding first and multiplying by a
+    // device pixel ratio of 3 turns half a CSS pixel into one and a half device pixels
+    // of mismatch, which is exactly the softness this sizing exists to avoid.
+    const rect = this.canvas.getBoundingClientRect();
+    const cssWidth = rect.width || 960;
+    const cssHeight = rect.height || STAGE_HEIGHT;
     this.dpr = dpr;
     this.cssWidth = cssWidth;
     this.cssHeight = cssHeight;
@@ -268,13 +273,12 @@ export class StageRenderer {
    * devicePixelRatio, which fire no resize event and used to leave the canvas blurry.
    */
   private resizeIfStale(): void {
-    if (
-      (window.devicePixelRatio || 1) !== this.dpr ||
-      this.canvas.clientWidth !== this.cssWidth ||
-      this.canvas.clientHeight !== this.cssHeight
-    ) {
-      this.resize();
-    }
+    const rect = this.canvas.getBoundingClientRect();
+    // A tenth of a CSS pixel: below what any display can show, above the float noise a
+    // fractional layout produces frame to frame.
+    const moved =
+      Math.abs(rect.width - this.cssWidth) > 0.1 || Math.abs(rect.height - this.cssHeight) > 0.1;
+    if (moved || (window.devicePixelRatio || 1) !== this.dpr) this.resize();
   }
 
   /**

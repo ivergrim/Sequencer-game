@@ -11,6 +11,7 @@ import { clearProgress, loadProgress, saveProgress } from './game/save';
 import { requiredNotes } from './game/simulate';
 import { GameState } from './game/state';
 import type { Instrument } from './game/types';
+import { Controls } from './ui/controls';
 import { SequencerUI } from './ui/sequencer';
 import type { RenderObstacle } from './ui/stage';
 import { BANDS, RISE_SECONDS, StageRenderer } from './ui/stage';
@@ -32,6 +33,7 @@ const chapter = CHAPTER_1;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
 const sequencerHost = document.querySelector<HTMLElement>('#sequencer')!;
+const controlHost = document.querySelector<HTMLElement>('#controls')!;
 const startOverlay = document.querySelector<HTMLElement>('#start')!;
 
 let started = false;
@@ -151,7 +153,26 @@ async function start(): Promise<void> {
     }
   }
 
-  installControls(state, persist);
+  const clearEditable = () => {
+    state.clearEditable();
+    persist();
+  };
+
+  /**
+   * Restarting is the one deliberate reload in the game. The no-reload rule protects
+   * the run loop - nothing in play may stop the world - and abandoning the chapter is
+   * precisely the player leaving that loop.
+   */
+  const controls = new Controls(controlHost, {
+    onRun: () => state.requestRun(),
+    onClear: clearEditable,
+    onRestart: () => {
+      clearProgress();
+      location.reload();
+    },
+  });
+
+  installKeys(state, clearEditable);
 
   if (import.meta.env.DEV) {
     // Handle for the browser checks in test/e2e. Dev only, stripped from any build.
@@ -237,6 +258,7 @@ async function start(): Promise<void> {
 
     const stepFloat = transport.stepFloat;
     sequencer.update(state, stepFloat);
+    controls.update(state);
     stage.render({
       stepFloat,
       now,
@@ -257,7 +279,7 @@ async function start(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-function installControls(state: GameState, persist: () => void): void {
+function installKeys(state: GameState, clear: () => void): void {
   window.addEventListener('keydown', (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
@@ -272,44 +294,9 @@ function installControls(state: GameState, persist: () => void): void {
         break;
       case 'Escape':
         event.preventDefault();
-        state.clearEditable();
-        persist();
+        clear();
         break;
     }
-  });
-
-  installRestart();
-}
-
-/**
- * Restart the chapter: wipe the save and reload.
- *
- * The one deliberate reload in the game. The no-reload rule protects the run loop -
- * nothing in play may stop the world - and abandoning the chapter is precisely the
- * player leaving that loop. Destructive, so it takes two presses: the first arms the
- * button for a few seconds, the second wipes.
- */
-function installRestart(): void {
-  const button = document.querySelector<HTMLButtonElement>('#restart');
-  if (!button) return;
-  const idle = button.textContent;
-  let armed: number | null = null;
-
-  button.addEventListener('click', () => {
-    if (armed !== null) {
-      clearProgress();
-      location.reload();
-      return;
-    }
-    button.textContent = 'sure? press again';
-    button.classList.add('armed');
-    armed = window.setTimeout(() => {
-      armed = null;
-      button.textContent = idle;
-      button.classList.remove('armed');
-    }, 3000);
-    // Left focused, the next Space would re-trigger the button instead of running.
-    button.blur();
   });
 }
 

@@ -25,10 +25,19 @@ html,
 body {
   margin: 0;
   padding: 0;
+}
+
+/* The viewport height the body's `min-height` below resolves against. */
+html {
   height: 100%;
 }
 
+/*
+ * `min-height` rather than `height`, so the body grows past the viewport instead of
+ * centring content that no longer fits and pushing its top out of reach.
+ */
 body {
+  min-height: 100%;
   background: var(--paper);
   color: var(--ink);
   font: 400 14px/1.4 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
@@ -48,11 +57,15 @@ body {
 /* ------------------------------------------------------------------ stage */
 
 /* The ground line the renderer draws is the scene's own baseline; the canvas needs no
-   border of its own under it. */
+   border of its own under it.
+
+   The height is fluid: the renderer draws in logical units and scales the whole scene
+   to whatever height it is given, so a short screen sees the same world, smaller. It
+   never crops, and one bar is still exactly one canvas width. */
 #stage {
   display: block;
   width: 100%;
-  height: 360px;
+  height: clamp(180px, 42vh, 360px);
   background: var(--paper);
   touch-action: none;
 }
@@ -166,6 +179,9 @@ body {
   height: var(--cell);
   cursor: pointer;
   position: relative;
+  /* Toggling is a rapid, repeated tap. Neither the 300ms delay nor double-tap zoom
+     belongs on it. */
+  touch-action: manipulation;
 }
 
 .seq-cell[data-quarter="true"] {
@@ -266,6 +282,56 @@ body {
   will-change: transform;
 }
 
+/* --------------------------------------------------------------- controls */
+
+/* Every input the game has, as a button. The keyboard is the faster way in on a
+   desktop, but it is not the only way in. */
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#controls button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.45rem 1rem;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  /* No 300ms tap delay, and no double-tap zoom on a control that gets pressed often. */
+  touch-action: manipulation;
+}
+
+#controls button:hover {
+  border-color: var(--ink);
+}
+
+#controls button[hidden] {
+  display: none;
+}
+
+/* Restarting the chapter wipes the save, so it sits apart from the run controls, reads
+   quieter than them until armed, and asks twice. */
+#restart {
+  margin-left: auto;
+  border-color: var(--line-soft);
+  color: var(--line);
+}
+
+#restart.armed {
+  color: var(--fail);
+  border-color: var(--fail);
+}
+
 /* ------------------------------------------------------------------ hints */
 
 #hints {
@@ -288,31 +354,11 @@ kbd {
   margin-right: 0.4em;
 }
 
-/* Restarting the chapter wipes the save, so the button sits apart from the hints and
-   asks twice. */
-#restart {
-  appearance: none;
-  -webkit-appearance: none;
-  margin-left: auto;
-  background: none;
-  border: 1px solid var(--line-soft);
-  border-radius: 2px;
-  padding: 0.1rem 0.6rem;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  color: var(--line);
-  cursor: pointer;
-}
-
-#restart:hover {
-  color: var(--ink);
-  border-color: var(--line);
-}
-
-#restart.armed {
-  color: var(--fail);
-  border-color: var(--fail);
+/* Nothing to hint at without a keyboard. */
+@media (pointer: coarse) {
+  #hints {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------------ start */
@@ -365,6 +411,45 @@ kbd {
   61%,
   100% {
     opacity: 0.25;
+  }
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+/*
+ * A phone-width screen. The grid is sixteen columns wide whatever happens - it is the
+ * bar - so the room comes out of the row labels and the cell height instead, and the
+ * app takes the full width rather than a gutter it cannot afford.
+ */
+@media (max-width: 560px) {
+  :root {
+    --cell: 1.4rem;
+    --name-w: 3.2rem;
+  }
+
+  #app {
+    width: 100vw;
+    padding: 0 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .seq-name {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    padding-right: 0.35rem;
+  }
+
+  .seq-head {
+    font-size: 10px;
+    gap: 0.5rem;
+  }
+
+  .seq-cell .pad {
+    inset: 2px 2px;
+  }
+
+  #controls button {
+    padding: 0.55rem 0.8rem;
   }
 }
 
