@@ -80,8 +80,8 @@ await installMonitor();
   check('stage 1 budget is 1', s.budget === 1);
   check('only the kick row is unlocked', s.unlocked.length === 1 && s.unlocked[0] === 'kick');
   check(
-    'the other five rows are locked and greyed',
-    s.locked.length === 5 && !s.locked.includes('kick'),
+    'the other four rows are locked and greyed',
+    s.locked.length === 4 && !s.locked.includes('kick'),
     s.locked.join(','),
   );
 }
@@ -173,7 +173,7 @@ check(
 
 check(
   'every row is unlocked by the end',
-  (await snapshot()).unlocked.length === 6,
+  (await snapshot()).unlocked.length === 5,
   (await snapshot()).unlocked.join(','),
 );
 

@@ -84,24 +84,6 @@ function openhat(time: number, out: AudioNode): void {
   source.connect(high).connect(gain).connect(out);
 }
 
-/** Bandpassed noise at 6kHz, 50ms decay. */
-function shaker(time: number, out: AudioNode): void {
-  const ctx = getContext();
-  const duration = 0.08;
-  const source = noiseSource(duration, time);
-
-  const band = ctx.createBiquadFilter();
-  band.type = 'bandpass';
-  band.frequency.value = 6000;
-  band.Q.value = 1.2;
-
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.45, time);
-  gain.gain.exponentialRampToValueAtTime(SILENT, time + 0.05);
-
-  source.connect(band).connect(gain).connect(out);
-}
-
 /** A 20ms noise click plus a short triangle blip around 800Hz. */
 function rim(time: number, out: AudioNode): void {
   const ctx = getContext();
@@ -148,7 +130,6 @@ const VOICES: Record<Instrument, (time: number, out: AudioNode) => void> = {
   kick,
   clap,
   openhat,
-  shaker,
   rim,
   crash,
 };

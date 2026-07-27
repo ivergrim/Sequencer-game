@@ -14,10 +14,10 @@ export const CHAPTER_1: Chapter = {
   bpm: 124,
   patternLength: 16,
   // Display order only, top to bottom. It mirrors the obstacles' vertical order on
-  // stage — pest highest, then bird, enemy, totem, pillar on the ground — so a row and
-  // the thing it clears sit at the same height. The wall spans the full height, and its
-  // crash takes the top slot, which is also where a drum kit puts it.
-  rows: ['crash', 'shaker', 'openhat', 'clap', 'rim', 'kick'],
+  // stage — bird highest, then enemy, totem, pillar on the ground — so a row and the
+  // thing it clears sit at the same height. The wall spans the full height, and its crash
+  // takes the top slot, which is also where a drum kit puts it.
+  rows: ['crash', 'openhat', 'clap', 'rim', 'kick'],
   stages: [
     {
       id: 1,
@@ -64,10 +64,10 @@ export const CHAPTER_1: Chapter = {
       id: 6,
       label: 'Sixteenth lift',
       obstacles: [
-        { step: 3, type: 'pest' },
-        { step: 7, type: 'pest' },
-        { step: 11, type: 'pest' },
-        { step: 15, type: 'pest' },
+        { step: 3, type: 'bird' },
+        { step: 7, type: 'bird' },
+        { step: 11, type: 'bird' },
+        { step: 15, type: 'bird' },
       ],
       stem: 'chop',
     },
@@ -98,7 +98,7 @@ export const CHAPTER_1: Chapter = {
       obstacles: [
         { step: 12, type: 'bird' },
         { step: 13, type: 'totem' },
-        { step: 14, type: 'pest' },
+        { step: 14, type: 'enemy' },
       ],
       stem: 'lead',
     },

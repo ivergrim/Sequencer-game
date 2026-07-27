@@ -32,7 +32,6 @@ export const ACTIONS: Record<Instrument, ActionSpec> = {
   crash: { duration: 0.24, impact: 0.6 }, // dash, mid-dash at full speed
   clap: { duration: 0.2, impact: 0.55 }, // punch, full extension
   openhat: { duration: 0.18, impact: 0.5 }, // duck, lowest point
-  shaker: { duration: 0.18, impact: 0.5 }, // swat, top of the reach
   rim: { duration: 0.2, impact: 0.5 }, // hurdle, top of the step-over
 };
 

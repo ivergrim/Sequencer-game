@@ -171,7 +171,7 @@ await solveCurrentStage(page);
 
 // ---------------------------------------- 6 & 7. failure feedback is stage-only
 {
-  // Fail on a small type introduced eight stages earlier: the stage 6 shaker on step 3.
+  // Fail on a small type introduced four stages earlier: the stage 6 open hat on step 3.
   const before = await page.evaluate(() => {
     const cells = [...document.querySelectorAll('.seq-cell')];
     return {
@@ -185,7 +185,7 @@ await solveCurrentStage(page);
   // Committed notes are frozen now, so a small, old obstacle can no longer be orphaned
   // through the UI. The renderer still has to identify one, so force it directly.
   await page.evaluate(() => {
-    window.__debug.state.pattern.shaker[3] = false;
+    window.__debug.state.pattern.openhat[3] = false;
   });
   await page.mouse.move(5, 5); // keep hover styling out of the comparison
   await page.keyboard.press('Space');
@@ -246,8 +246,8 @@ await solveCurrentStage(page);
 
   const failed = await snap();
   check(
-    'the run failed on the old, small shaker',
-    failed.failure?.step === 3 && failed.failure?.missing === 'shaker',
+    'the run failed on the old, small open hat',
+    failed.failure?.step === 3 && failed.failure?.missing === 'openhat',
     JSON.stringify(failed.failure),
   );
   check('no sequencer cell changes class on failure', before.classes === during.classes);
@@ -263,7 +263,7 @@ await solveCurrentStage(page);
   const culprit = await page.evaluate(() => window.__debug.stage.lastCulprit);
   check(
     'the culprit is drawn large, full opacity, in the foreground',
-    culprit !== null && culprit.type === 'pest' && culprit.alpha === 1 && culprit.grown === true,
+    culprit !== null && culprit.type === 'bird' && culprit.alpha === 1 && culprit.grown === true,
     JSON.stringify(culprit),
   );
   check('the character stays visible through the death camera', failed.characterDrawn === true);

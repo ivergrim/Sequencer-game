@@ -1,5 +1,5 @@
-export type Instrument = 'kick' | 'clap' | 'openhat' | 'shaker' | 'rim' | 'crash';
-export type ObstacleType = 'pillar' | 'enemy' | 'bird' | 'pest' | 'totem' | 'wall';
+export type Instrument = 'kick' | 'clap' | 'openhat' | 'rim' | 'crash';
+export type ObstacleType = 'pillar' | 'enemy' | 'bird' | 'totem' | 'wall';
 
 /**
  * The only binding between the world and the sequencer. A stage is authored as
@@ -10,7 +10,6 @@ export const OBSTACLE_INSTRUMENT: Record<ObstacleType, Instrument> = {
   pillar: 'kick',
   enemy: 'clap',
   bird: 'openhat',
-  pest: 'shaker',
   totem: 'rim',
   wall: 'crash',
 };

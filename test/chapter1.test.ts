@@ -16,11 +16,22 @@ function derivedSolution(stageIndex: number): Pattern {
 }
 
 describe('chapter 1 data', () => {
-  it('is 124 BPM, 16 steps, six rows in the declared order', () => {
+  it('is 124 BPM, 16 steps, five rows in the declared order', () => {
     expect(CHAPTER_1.bpm).toBe(124);
     expect(patternLength).toBe(16);
     // Top to bottom, mirroring the obstacles' vertical order on stage.
-    expect(rows).toEqual(['crash', 'shaker', 'openhat', 'clap', 'rim', 'kick']);
+    expect(rows).toEqual(['crash', 'openhat', 'clap', 'rim', 'kick']);
+  });
+
+  it('gives the open hat the whole hat part', () => {
+    // The shaker was dropped: it sounded too close to the open hat and its swarm read
+    // too close to the bird, which is what made the late stages cluttered rather than
+    // hard. The open hat now covers both the offbeat eighths and the sixteenths.
+    const hats = requiredNotes(activeObstacles(CHAPTER_1, 9))
+      .filter((n) => n.instrument === 'openhat')
+      .map((n) => n.step)
+      .sort((a, b) => a - b);
+    expect(hats).toEqual([2, 3, 6, 7, 10, 11, 12, 14, 15]);
   });
 
   it('has ten stages, each adding a stem', () => {

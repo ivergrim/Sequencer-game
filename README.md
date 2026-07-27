@@ -223,13 +223,18 @@ shaker highest, then openhat, clap, rim, and kick on the ground, with crash at t
 where the wall's full-height silhouette and a drum kit both put it. A row and the thing it
 clears sit at the same height.
 
-**Silhouettes differ in kind, not degree.** The bird is one connected gull shape; the pest
-is a scatter of separate specks. Drawing both as the same texture with a different mark
-count made them impossible to tell apart, which is what made the late stages feel
-arbitrary rather than hard.
+**There is one small type, not two.** The chapter originally ran a shaker alongside the
+open hat. The two sounded too close and their silhouettes read too close at speed, and no
+amount of redrawing fixed it, so the shaker was dropped and the open hat took its part —
+2, 3, 6, 7, 10, 11, 12, 14 and 15, which is a hat pattern a deep house track would
+actually play. The budget table is unchanged: stage 6 places hats where it used to place
+shakers, and stage 10's third obstacle became a clap on 14.
 
-**New arrivals breathe.** A freshly added obstacle pulses for its first few bars, so the
-one thing a stage introduced stands out from the twenty it did not.
+**The current stage's obstacles are marked.** Everything this stage introduced wears a
+caret and bobs gently, for as long as it is the current stage's business. Tied to the
+stage rather than to a timer, so it is still there however long the player takes and gone
+the moment it is solved. The bob is a position change and never a size one, because size
+is reserved for weight and must never track age.
 
 The two depth systems below stay deliberately independent, so they can never multiply and
 bury the oldest small obstacles:
@@ -277,7 +282,6 @@ distinguishable at a glance even at 121ms apart:
 | rim | totem | shin | hurdle, lead leg thrown forward |
 | clap | enemy | chest | punch, arm and fist driven forward |
 | openhat | bird | head | duck, deep crouch with the head pushed down and forward |
-| shaker | pest | overhead | swat, arm thrown straight up |
 | crash | wall | full height | dash, forward lunge with speed lines |
 
 They layer by taking the max of each channel, so a crash and a kick on one step give a
@@ -286,8 +290,10 @@ BPM lasts 121ms and a subtle move simply is not seen.
 
 The character exists only for the run, and enters and leaves along the depth axis rather
 than across the ground — small, grey and lifted towards the vanishing point, behind the
-obstacle layer, resolving to full size and full ink as it reaches the launch position. It
-therefore never traverses the obstacle field and never appears to run through anything.
+obstacle layer, resolving to full size and full ink as it reaches the launch position. The
+lateral travel is deliberately tiny, because any long slide along the ground reads as
+running past the obstacles whichever layer it is drawn on; the apparent size does the
+work, on a curve that changes fastest while it is far away.
 
 ### Action timing
 

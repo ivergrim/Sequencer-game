@@ -3,7 +3,7 @@ import { requiredInstruments, requiredNotes, simulate } from '../src/game/simula
 import type { Instrument, Obstacle, Pattern } from '../src/game/types';
 import { emptyPattern } from '../src/game/types';
 
-const ROWS: Instrument[] = ['kick', 'clap', 'openhat', 'shaker', 'rim', 'crash'];
+const ROWS: Instrument[] = ['crash', 'openhat', 'clap', 'rim', 'kick'];
 const LENGTH = 16;
 
 function pattern(notes: Partial<Record<Instrument, number[]>>): Pattern {
@@ -72,7 +72,7 @@ describe('simulate', () => {
 
   it('treats extra hits as harmless', () => {
     const obstacles: Obstacle[] = [{ step: 0, type: 'pillar' }];
-    const noisy = pattern({ kick: [0, 1, 2, 3], crash: [5], shaker: [9] });
+    const noisy = pattern({ kick: [0, 1, 2, 3], crash: [5], openhat: [9] });
     expect(simulate(obstacles, noisy, LENGTH)).toEqual({ ok: true });
   });
 
@@ -116,10 +116,10 @@ describe('simulate', () => {
 
   it('is deterministic: the same inputs always give the same result', () => {
     const obstacles: Obstacle[] = [
-      { step: 3, type: 'pest' },
-      { step: 7, type: 'pest' },
+      { step: 3, type: 'bird' },
+      { step: 7, type: 'bird' },
     ];
-    const p = pattern({ shaker: [3] });
+    const p = pattern({ openhat: [3] });
     const first = simulate(obstacles, p, LENGTH);
     for (let i = 0; i < 100; i++) expect(simulate(obstacles, p, LENGTH)).toEqual(first);
   });

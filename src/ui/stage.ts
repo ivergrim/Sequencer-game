@@ -34,7 +34,7 @@ const SOFT = '#dcdcdc';
 const FAIL = '#c1554b';
 const PAPER = '#f7f7f7';
 /** Receded obstacles desaturate towards this rather than shrinking. */
-const RECEDED_INK = '#7d7d7d';
+const RECEDED_INK = '#909090';
 
 export const STAGE_HEIGHT = 360;
 const GROUND_Y = 292;
@@ -50,16 +50,19 @@ const GROUND_Y = 292;
 const DINO_FRACTION = 0.28;
 
 /** How far a receded obstacle drops in opacity. A hard floor, so small types survive it. */
-const RECEDED_ALPHA = 0.38;
+const RECEDED_ALPHA = 0.26;
 
 /**
- * How long a newly added obstacle stays emphasised.
+ * Emphasis on the obstacles this stage introduced.
  *
- * By stage 10 there are twenty-one objects across one screen and a single new shaker is
- * easy to miss entirely. For its first few bars it breathes, so the thing this stage is
- * actually asking about announces itself.
+ * Tied to the stage rather than to a timer: it is still there however long the player
+ * takes, and it goes the moment the stage is cleared and the obstacle recedes. A caret
+ * above and a slow bob, so the one thing being asked about is unmissable among twenty
+ * that are not. The bob is deliberately a position change and not a size one, because
+ * size is reserved for weight and must never track age.
  */
-const ARRIVAL_SECONDS = 7;
+const ARRIVAL_BOB = 4;
+const ARRIVAL_BOB_HZ = 1.6;
 
 /**
  * The character reads as a runner among obstacles, not a giant stepping over pebbles, so
@@ -88,10 +91,17 @@ const RISE_SECONDS = 0.6;
  * never traverses the obstacle field and never appears to run through anything. Behind
  * the obstacle layer, small, grey and lifted towards the ground line's vanishing point.
  */
-const ENTRY_X = 0.05;
-const EXIT_X = 0.95;
-const HORIZON_SCALE = 0.2;
-const HORIZON_LIFT = 26;
+/**
+ * How far to either side of the launch position it appears from and disappears to.
+ *
+ * Small on purpose. A long slide across the ground reads as running past the obstacles,
+ * whichever layer it is on; keeping the lateral travel short leaves the shrinking, the
+ * greying and the lift towards the vanishing point to carry the movement, which is what
+ * makes it read as coming out of the screen rather than in from the wings.
+ */
+const HORIZON_OFFSET = 0.07;
+const HORIZON_SCALE = 0.12;
+const HORIZON_LIFT = 34;
 
 /**
  * How long an obstacle's reaction lasts once it crosses the launch position.
@@ -124,12 +134,11 @@ interface Band {
 }
 
 export const BANDS: Record<ObstacleType, Band> = {
-  pillar: { bottom: 0, top: 50 }, // on the ground
-  totem: { bottom: 56, top: 80 }, // just above
-  enemy: { bottom: 86, top: 116 }, // chest
-  bird: { bottom: 122, top: 150 }, // head
-  pest: { bottom: 156, top: 182 }, // above head
-  wall: { bottom: 0, top: 192 }, // spans full height, drawn behind the others
+  pillar: { bottom: 0, top: 52 }, // on the ground
+  totem: { bottom: 62, top: 92 }, // just above
+  enemy: { bottom: 102, top: 138 }, // chest
+  bird: { bottom: 148, top: 186 }, // head
+  wall: { bottom: 0, top: 196 }, // spans full height, drawn behind the others
 };
 
 /** Weight is set by instrument. Size and detail only, never opacity. */
@@ -141,7 +150,6 @@ const WEIGHT: Record<ObstacleType, Weight> = {
   wall: 'large', // crash
   totem: 'medium', // rim
   bird: 'small', // openhat
-  pest: 'small', // shaker
 };
 
 export interface RenderObstacle {
@@ -190,8 +198,6 @@ interface Pose {
   punch: number;
   /** openhat, under the bird at head height. */
   duck: number;
-  /** shaker, up at the pest above head height. */
-  swat: number;
   /** crash, straight through the wall. */
   dash: number;
 }
@@ -289,7 +295,7 @@ export class StageRenderer {
     if (camera && frame.failure) {
       // Dim the whole stage to a uniform low level, then restore the culprit over it at
       // full opacity, foreground layer and full size, overriding both its weight and its
-      // depth state. Identifying a shaker introduced eight stages ago depends on this.
+      // depth state. Identifying a hat introduced four stages ago depends on this.
       g.fillStyle = PAPER;
       g.globalAlpha = 0.74;
       g.fillRect(0, 0, w, STAGE_HEIGHT);
@@ -486,16 +492,18 @@ export class StageRenderer {
       }
     }
 
-    // A newly added obstacle breathes for its first few bars on top of everything else,
-    // so the one thing this stage introduced stands out from the twenty it did not.
-    const age = now - obstacle.addedAt;
-    const arrival = age < ARRIVAL_SECONDS ? 1 - age / ARRIVAL_SECONDS : 0;
-    const breath = arrival > 0 ? 1 + arrival * 0.09 * (0.5 + 0.5 * Math.sin(age * 4.2)) : 1;
+    // Everything this stage introduced bobs gently and wears a caret, for as long as it
+    // is the current stage's business.
+    if (foreground) {
+      const bob = Math.sin(now * ARRIVAL_BOB_HZ * Math.PI * 2) * ARRIVAL_BOB;
+      g.translate(0, bob);
+      caret(g, x, top - 16);
+    }
 
     // The obstacle announces itself as it crosses the launch position: a quick swell and
     // snap back, pivoting on its base so a grounded shape never lifts off the ground.
-    if (reaction !== null || breath !== 1) {
-      const swell = breath * (1 + (reaction === null ? 0 : pop(reaction)) * SWELL);
+    if (reaction !== null) {
+      const swell = 1 + pop(reaction) * SWELL;
       const pivotY = grounded ? bottom : (bottom + top) / 2;
       g.save();
       g.translate(x, pivotY);
@@ -506,10 +514,8 @@ export class StageRenderer {
 
       // Dust and ripples stay unscaled, so they read as thrown off the obstacle rather
       // than as part of it.
-      if (reaction !== null) {
-        if (grounded) dustPuff(g, x, bottom, reaction, alpha);
-        else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
-      }
+      if (grounded) dustPuff(g, x, bottom, reaction, alpha);
+      else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
     } else {
       drawShape(g, obstacle.type, x, bottom, top);
     }
@@ -519,8 +525,8 @@ export class StageRenderer {
 
   /**
    * The culprit under the death camera: full opacity, foreground layer and full size,
-   * overriding both its weight and its depth state. A shaker that killed you is drawn
-   * large, not merely brightened.
+   * overriding both its weight and its depth state. A hat that killed you is drawn large,
+   * not merely brightened.
    *
    * The shape itself carries a red tint that breathes, rather than being ringed. A drawn
    * ring points at the answer; a tinted shape lets the obstacle be the thing you notice.
@@ -609,9 +615,6 @@ export class StageRenderer {
         case 'openhat':
           pose.duck = Math.max(pose.duck, value);
           break;
-        case 'shaker':
-          pose.swat = Math.max(pose.swat, value);
-          break;
         case 'rim':
           pose.hurdle = Math.max(pose.hurdle, value);
           break;
@@ -627,10 +630,10 @@ export class StageRenderer {
       // through on the way, because there is no ground-level traversal to run through
       // anything with — it arrives out of the depth of the scene instead.
       depth = frame.character.progress;
-      x = ENTRY_X * w + (dinoX - ENTRY_X * w) * depth;
+      x = dinoX - HORIZON_OFFSET * w * (1 - depth);
     } else if (mode === 'exiting') {
       depth = 1 - frame.character.progress;
-      x = dinoX + (EXIT_X * w - dinoX) * frame.character.progress;
+      x = dinoX + HORIZON_OFFSET * w * frame.character.progress;
     } else if (mode === 'down' && camera) {
       tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
     }
@@ -643,18 +646,20 @@ export class StageRenderer {
       pose.hurdle *= depth;
       pose.punch *= depth;
       pose.duck *= depth;
-      pose.swat *= depth;
       pose.dash *= depth;
     }
     this.lastPose = pose;
 
     // Distance reads as three things at once: smaller, greyer, and closer to the ground
     // line's vanishing point.
-    const scale = CHAR_SCALE * (HORIZON_SCALE + (1 - HORIZON_SCALE) * depth);
-    const groundY = GROUND_Y - (1 - depth) * HORIZON_LIFT;
-    const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, depth);
-    // Fade the last stretch out entirely, so it does not pop at the screen edge.
-    const fade = clamp01(depth / 0.22);
+    // Perspective, not linear interpolation: an approach reads as depth when the apparent
+    // size changes fastest while it is far away.
+    const near = depth * depth * (3 - 2 * depth);
+    const scale = CHAR_SCALE * (HORIZON_SCALE + (1 - HORIZON_SCALE) * near);
+    const groundY = GROUND_Y - (1 - near) * HORIZON_LIFT;
+    const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, near);
+    // Fade the last stretch out entirely, so it does not pop into or out of nothing.
+    const fade = clamp01(depth / 0.18);
 
     // Any action still in flight settles out over the tumble instead of being cut, so a
     // character caught mid-air comes down rather than snapping to the ground. It also
@@ -684,7 +689,7 @@ export class StageRenderer {
       g.rotate(tumble * 1.4);
       g.translate(0, Math.sin(Math.PI * Math.min(tumble * 1.6, 1)) * -16);
     } else {
-      g.rotate(pose.dash * 0.12 - pose.swat * 0.1);
+      g.rotate(pose.dash * 0.12);
     }
     g.scale(scale, scale);
 
@@ -694,7 +699,6 @@ export class StageRenderer {
       hurdle: pose.hurdle,
       crouch: pose.duck,
       punch: pose.punch,
-      swat: pose.swat,
       tumbled: tumble > 0,
       ink,
     });
@@ -732,7 +736,7 @@ export class StageRenderer {
 // -------------------------------------------------------------------- helpers
 
 function emptyPose(): Pose {
-  return { jump: 0, hurdle: 0, punch: 0, duck: 0, swat: 0, dash: 0 };
+  return { jump: 0, hurdle: 0, punch: 0, duck: 0, dash: 0 };
 }
 
 function isCurrent(obstacle: RenderObstacle, currentStage: number | null): boolean {
@@ -815,9 +819,6 @@ function drawShape(
     case 'bird':
       birdGlyph(g, x, bottom, top);
       break;
-    case 'pest':
-      pestGlyph(g, x, bottom, top);
-      break;
   }
 }
 
@@ -891,6 +892,15 @@ function ripple(
   g.fillStyle = previousFill;
 }
 
+/** A small caret over the obstacles this stage introduced. */
+function caret(g: CanvasRenderingContext2D, x: number, y: number): void {
+  g.fillRect(x - 7, y - 7, 4, 4);
+  g.fillRect(x - 4, y - 4, 4, 4);
+  g.fillRect(x - 1, y - 1, 3, 4);
+  g.fillRect(x + 1, y - 4, 4, 4);
+  g.fillRect(x + 4, y - 7, 4, 4);
+}
+
 function cloud(g: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
   const w = 46 * scale;
   const h = 14 * scale;
@@ -961,9 +971,9 @@ function blob(g: CanvasRenderingContext2D, x: number, bottom: number, top: numbe
 /**
  * bird (openhat): one coherent gull silhouette.
  *
- * Both small types used to be the same scatter of marks with a different count, which is
- * why they were impossible to tell apart. They now differ in kind, not degree: the bird
- * is a single connected wide shape, the pest is a scatter of separate specks.
+ * The one small type left. It shared the stage with a shaker's swarm for a while, and the
+ * pair were never distinguishable at speed however differently they were drawn, which is
+ * why the shaker was dropped rather than redrawn again.
  */
 function birdGlyph(g: CanvasRenderingContext2D, x: number, bottom: number, top: number): void {
   const h = bottom - top;
@@ -978,31 +988,12 @@ function birdGlyph(g: CanvasRenderingContext2D, x: number, bottom: number, top: 
   g.fillRect(x + u(10), midY - u(10), u(6), u(4)); // right wing tip
 }
 
-/** pest (shaker): a scatter of separate specks, never a single body. */
-function pestGlyph(g: CanvasRenderingContext2D, x: number, bottom: number, top: number): void {
-  const h = bottom - top;
-  const s = h / 26;
-  const midY = top + h * 0.5;
-  const marks: Array<[number, number]> = [
-    [-12, -5],
-    [-5, 3],
-    [2, -7],
-    [9, 1],
-    [-1, -1],
-    [13, -6],
-  ];
-  for (const [dx, dy] of marks) {
-    g.fillRect(Math.round(x + dx * s), Math.round(midY + dy * s), Math.round(4 * s), Math.round(4 * s));
-  }
-}
-
 interface RunnerPose {
   legPhase: number;
   airborne: boolean;
   hurdle: number;
   crouch: number;
   punch: number;
-  swat: number;
   tumbled: boolean;
   ink: string;
 }
@@ -1080,13 +1071,6 @@ function runner(g: CanvasRenderingContext2D, pose: RunnerPose): void {
   if (pose.punch > 0.02) {
     g.fillRect(6, bodyY + 3, 10 + pose.punch * 30, 6);
     g.fillRect(14 + pose.punch * 30, bodyY, 8, 11); // fist
-  } else if (pose.swat > 0.02) {
-    // The swat throws an arm straight up at the pest overhead. It rises on the near side
-    // of the neck rather than in front of it: drawn over the head in the same ink it
-    // simply disappears into the silhouette.
-    const reach = pose.swat;
-    g.fillRect(-3, bodyY + 4 - reach * 30, 7, 10 + reach * 30);
-    g.fillRect(-7, bodyY - 2 - reach * 38, 14, 9); // open hand, clear above the head
   } else {
     g.fillRect(6, bodyY + 4, 8, 5);
   }

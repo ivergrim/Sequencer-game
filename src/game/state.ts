@@ -36,8 +36,10 @@ export const DEATH_CAMERA = {
   total: 1.6,
 };
 
-/** Fraction of the count-in bar the character spends entering from off screen left. */
-const ENTRY_FRACTION = 0.6;
+/** Fraction of the count-in bar the character spends arriving out of the distance. */
+const ENTRY_FRACTION = 0.32;
+/** Fraction of the success flourish the character spends receding into the distance. */
+const EXIT_FRACTION = 0.38;
 
 /** Where the character is, and whether the stage draws it at all. */
 export interface CharacterPose {
@@ -302,7 +304,7 @@ export class GameState {
         return { mode: 'running', progress: 1 };
 
       case 'success': {
-        const progress = this.successProgress;
+        const progress = this.successProgress / EXIT_FRACTION;
         return progress >= 1
           ? { mode: 'hidden', progress: 1 }
           : { mode: 'exiting', progress };
