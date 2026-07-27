@@ -7,6 +7,7 @@ and the run clears.
 
 - `GAME_DESIGN.md` — the full design
 - `PROTOTYPE_BRIEF.md` — the scope of this prototype
+- `PATCH_1.md` — changes to the baseline; where it conflicts with the brief, it wins
 
 ## Requirements
 
@@ -48,6 +49,7 @@ the dev server in a real Chromium.
 npm run dev                # in one terminal
 npm run test:e2e           # in another: plays stage 1 through 10
 npm run test:e2e:drift     # five minutes, then measures alignment
+npm run test:e2e:patch1    # the patch 1 acceptance criteria
 ```
 
 `test:e2e` plays the whole chapter by clicking real cells, and checks the budget
@@ -55,9 +57,15 @@ rejection, row locking, the carried-over-note failure, and that the transport is
 restarted and never stalls.
 
 `test:e2e:drift` fills the pattern so a hit lands on every step, then records how far the
-derived `stepFloat` sits from the step each hit was scheduled for. That one number is the
-alignment error, since the character, the obstacles and the playhead all derive from
-`stepFloat`. It compares the first thirty seconds against the last.
+derived `stepFloat` sits from the step each hit was scheduled to sound on. That one number
+is the alignment error, since the obstacles and the playhead both derive from `stepFloat`.
+It compares the first thirty seconds against the last.
+
+`test:e2e:patch1` covers the criteria added by the patch: that the character is absent
+during EDITING, that it is in position before step 0, that the pose channel is at its
+maximum on the frame an obstacle reaches `DINO_X`, that stage 10 renders exactly three
+obstacles in the foreground, that the bands on step 12 do not overlap, and that no element
+of the sequencer changes appearance when a run fails.
 
 Set `E2E_CHROMIUM` to a Chromium binary if Playwright's own download is not present, and
 `E2E_MINUTES` to change the drift duration.
@@ -189,6 +197,41 @@ this repo. At step N an obstacle either requires instrument I or it does not, an
 pattern at step N either contains I or does not. The run outcome is computed in full
 before the animation starts; the animation presents an already-decided result.
 
+### Reading the stage
+
+Two systems keep the stage legible as obstacles accumulate, and they are deliberately
+independent so they can never multiply and bury the oldest small obstacles:
+
+| | Set by | Controls | Changes with |
+|---|---|---|---|
+| **Weight** | instrument | size and detail | never |
+| **Depth** | recency | opacity and layer | which stage is current |
+
+Each obstacle type also occupies a fixed, non-overlapping vertical band. This is load
+bearing rather than decorative: chapter 1 stacks three obstacles on step 12 and two each
+on steps 0, 4 and 15, which would occlude each other at the same x without it. No lane
+guides are ever drawn — it reads only as characteristic height per type.
+
+### Action timing
+
+The character has to be mid-action when an obstacle arrives, not starting one. Each
+action carries an impact ratio, and its animation is scheduled at
+
+```
+animationStart = stepTime(S) - duration * impactRatio
+```
+
+so the apex of a jump, the full extension of a punch and the full speed of a dash all
+land exactly on the step. Audio and animation decouple here: the drum hit still fires at
+`stepTime(S)`, and only the animation starts early. This is why animation scheduling
+lives in the frame loop rather than the audio scheduler — a 400ms jump begins 200ms
+before its step, and the lookahead only reaches 100ms ahead.
+
+Durations are capped by the gap to the nearest hit on the same instrument. The patch
+specifies capping forwards only; that is not enough, because an action extends backwards
+by its lead too, and chapter 1's kick on step 15 followed by a kick on step 0 would
+overlap and merge into one hover instead of two distinct jumps.
+
 The solution to a stage is never authored. It is derived from the obstacle set through
 `OBSTACLE_INSTRUMENT`, so a stage is placed obstacles and nothing else. There is no
 answer key anywhere in the repo.
@@ -227,3 +270,18 @@ scheduler into an `AudioWorklet` or a `Worker`, which is beyond this prototype.
 | 8 | No hitbox or physics code | `grep -rniE "hitbox\|intersect\|collide\|bounding\|physics\|velocity\|gravity" src/` |
 | 9 | `wrangler deploy` produces a working URL | Needs Cloudflare credentials; `npx wrangler deploy --dry-run` validates the config without them |
 | 10 | A push to `main` deploys | Needs Workers Builds connected in the dashboard, see above |
+
+Patch 1 adds ten more, covered by `test/actions.test.ts` and `test:e2e:patch1`:
+
+| # | Criterion | Where it is checked |
+|---|---|---|
+| 1 | No character on stage during EDITING | `test:e2e:patch1` |
+| 2 | Enters during the count-in, in position by step 0 | `test:e2e:patch1` |
+| 3 | Mid-action, not starting one, at the impact frame | `test:e2e:patch1` and `test/actions.test.ts` |
+| 4 | The drum fires on the step, the animation began before | `test:e2e:drift` |
+| 5 | Kick on 15 then 0 gives two distinct, complete jumps | `test/actions.test.ts` |
+| 6 | Nothing in the sequencer changes on failure | `test:e2e:patch1` |
+| 7 | The culprit is unambiguous, however small and old | `test:e2e:patch1` |
+| 8 | Three foreground, eighteen receded, at stage 10 | `test:e2e:patch1` |
+| 9 | Step 12's three obstacles do not occlude | `test:e2e:patch1` |
+| 10 | Size never tracks age, opacity never tracks type | Weight and depth are separate code paths; `test:e2e:patch1` pins the counts |

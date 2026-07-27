@@ -411,7 +411,9 @@ export class StageRenderer {
 
     this.actions = this.actions.filter((a) => now - a.start < a.duration);
 
-    const mode = frame.character.mode;
+    // 'down' outlives the camera by the frame it takes the state machine to release, so
+    // treat it as hidden once the camera has ended rather than snapping upright.
+    const mode = frame.character.mode === 'down' && !camera ? 'hidden' : frame.character.mode;
     if (mode === 'hidden') {
       this.characterDrawn = false;
       this.lastPose = emptyPose();

@@ -212,7 +212,7 @@ export class GameState {
       case 'failed':
         // Held for the death camera, then released to EDITING. Editing was never
         // locked, so the player can already be placing notes while it plays.
-        if (this.failure && this.transport.now >= this.failure.at + DEATH_CAMERA.total) {
+        if (!this.failure || this.transport.now >= this.failure.at + DEATH_CAMERA.total) {
           this.phase = 'editing';
         }
         break;
