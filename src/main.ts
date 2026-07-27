@@ -1,6 +1,6 @@
 import './style.css';
 
-import { getDrumBus, getLimiter, getStemBus, unlockAudio } from './audio/context';
+import { getDrumBus, getLimiter, getStemBus, installResume, unlockAudio } from './audio/context';
 import { triggerFailThud, triggerSuccessSting } from './audio/cues';
 import { triggerCountIn, triggerDrum } from './audio/drums';
 import { Stems } from './audio/stems';
@@ -54,6 +54,7 @@ async function start(): Promise<void> {
   started = true;
 
   const ctx = await unlockAudio();
+  installResume();
   startOverlay.classList.add('gone');
 
   const transport = new Transport(ctx, chapter.bpm, chapter.patternLength);

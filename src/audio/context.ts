@@ -82,6 +82,32 @@ export async function unlockAudio(): Promise<AudioContext> {
   return ctx;
 }
 
+/**
+ * Keep the context running for the life of the session.
+ *
+ * The first-gesture unlock is not enough on its own: browsers suspend a context on
+ * backgrounding, phone calls, output-device changes and other interruptions, and
+ * nothing resumes it automatically. A suspended context freezes `currentTime`, and
+ * with it the entire game — every position derives from that one clock.
+ *
+ * Three nets, because no single one catches every case: returning to the tab, the
+ * context announcing its own state change, and any fresh gesture (some browsers only
+ * honour resume() from inside one).
+ */
+export function installResume(): void {
+  const ctx = getContext();
+  const resume = () => {
+    if (ctx.state !== 'running') void ctx.resume();
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resume();
+  });
+  ctx.addEventListener('statechange', resume);
+  window.addEventListener('pointerdown', resume, { capture: true });
+  window.addEventListener('keydown', resume, { capture: true });
+}
+
 /** A shared white noise buffer. Every noise-based voice reads from this one buffer. */
 let noise: AudioBuffer | null = null;
 

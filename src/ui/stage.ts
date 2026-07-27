@@ -221,6 +221,10 @@ export class StageRenderer {
   private readonly g: CanvasRenderingContext2D;
   private actions: Action[] = [];
   private width = 0;
+  /** What the backing store was last sized for, checked every frame. */
+  private dpr = 0;
+  private cssWidth = 0;
+  private cssHeight = 0;
 
   /** Introspection for the browser checks. Nothing in the app reads these. */
   characterDrawn = false;
@@ -234,16 +238,43 @@ export class StageRenderer {
     if (!g) throw new Error('Canvas 2D is unavailable');
     this.g = g;
     this.resize();
-    window.addEventListener('resize', () => this.resize());
   }
 
+  /**
+   * Size the backing store to the canvas's CSS box and the device pixel ratio.
+   *
+   * The scene is drawn in logical units in which the stage is always `STAGE_HEIGHT`
+   * tall; a shorter canvas scales the whole scene down uniformly rather than cropping
+   * it, so small screens see the same world, smaller.
+   */
   resize(): void {
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = this.canvas.clientWidth || 960;
-    this.width = cssWidth;
+    const cssHeight = this.canvas.clientHeight || STAGE_HEIGHT;
+    this.dpr = dpr;
+    this.cssWidth = cssWidth;
+    this.cssHeight = cssHeight;
+
+    const scale = cssHeight / STAGE_HEIGHT;
+    this.width = cssWidth / scale;
     this.canvas.width = Math.round(cssWidth * dpr);
-    this.canvas.height = Math.round(STAGE_HEIGHT * dpr);
-    this.g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.canvas.height = Math.round(cssHeight * dpr);
+    this.g.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  }
+
+  /**
+   * Catch anything that changes how many device pixels the canvas needs — window
+   * resizes, but also zoom changes and the window moving to a monitor with a different
+   * devicePixelRatio, which fire no resize event and used to leave the canvas blurry.
+   */
+  private resizeIfStale(): void {
+    if (
+      (window.devicePixelRatio || 1) !== this.dpr ||
+      this.canvas.clientWidth !== this.cssWidth ||
+      this.canvas.clientHeight !== this.cssHeight
+    ) {
+      this.resize();
+    }
   }
 
   /**
@@ -257,6 +288,8 @@ export class StageRenderer {
   }
 
   render(frame: StageFrame): void {
+    this.resizeIfStale();
+
     const { g } = this;
     const w = this.width;
     const cell = w / frame.patternLength;
