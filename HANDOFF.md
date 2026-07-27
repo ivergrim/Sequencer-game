@@ -76,7 +76,9 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 - Screenshot-and-look loops (Playwright + Read on the PNG) were used constantly to
   judge visuals; the user also judges from the live build and sends feedback + sometimes
   screenshots. `test/e2e/hint-shot.mjs` is one of these — it drives three consecutive
-  failures so the death-camera hint can be eyeballed on both sides of the threshold.
+  failures so the death-camera hint can be eyeballed on both sides of the threshold — and
+  `test/e2e/entry-shot.mjs` is another, sampling the character's walk in at eight even
+  points across the count-in.
 
 ## Architecture (src/)
 
@@ -204,9 +206,18 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
     (lead leg thrown), clap=punch (arm+fist), openhat=duck (deep crouch, head forward),
     crash=dash (short lunge + speed lines; DASH kept small so it reads as through, not
     past). Entry/exit are **depth**, not traversal: tiny lateral travel
-    (`HORIZON_OFFSET 0.07`), smoothstep scale from `HORIZON_SCALE 0.12`, grey→ink,
-    lifted toward vanishing point, drawn **behind** obstacles while distant, fast
-    (`ENTRY_FRACTION 0.32` of the count-in bar).
+    (`HORIZON_OFFSET 0.07`), scale from `HORIZON_SCALE 0.05` on `depth^1.5` (accelerating,
+    the readable half of 1/distance — smoothstep eased off too early and reached full size
+    two beats before the run), grey→ink, `HORIZON_LIFT 58` toward the vanishing point,
+    drawn **behind** obstacles while distant.
+    - The entry takes the **whole count-in**, not a third of it. Standing at the launch
+      position before the run bar means unanswered obstacles pass through a character that
+      is not running that bar yet; distant, it is behind them and nothing touches it.
+      `ENTRY_LEAD_SECONDS = RUN_DECISION_LEAD + 0.06` in `state.ts` is the arrival point,
+      and the lead **must exceed `RUN_DECISION_LEAD`** — the decision moves the phase to
+      RUNNING, whose pose is `progress: 1`, so a shorter lead does not delay the arrival,
+      it truncates it (and `test:e2e:patch1` stops seeing an arrival at all, since it only
+      samples while ARMED). `test/state.test.ts` pins both ends.
 - `game/actions.ts` — impact-ratio timing (`animationStart = stepTime − duration·impact`;
   audio always fires exactly on the step — animation and audio are decoupled, animations
   are scheduled by the frame loop because leads exceed the audio lookahead). Durations
@@ -236,7 +247,10 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   where it stays performing the finished track permanently.
 - Character size, jump height etc. re-tuned smaller; pillar band grown to 52 for ratio.
 - Entry is "out of the screen" depth illusion per explicit user direction, not the
-  patch's "enters from off screen left at running speed" (user overrode).
+  patch's "enters from off screen left at running speed" (user overrode). It also lasts
+  the entire count-in on user direction, so the approach is never over while obstacles are
+  still crossing an idle character — patch 1 B2's "in position by step 0" holds, but only
+  just, and deliberately.
 - Patch 1 C1 says the culprit gets "a highlight ring" — rejected as too on the nose,
   it is a pulsing red tint instead.
 - `GAME_DESIGN.md` §10 and the brief's §"Sequencer" both say rows "start greyed out and

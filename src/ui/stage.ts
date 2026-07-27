@@ -114,8 +114,18 @@ export const RISE_SECONDS = 0.6;
  * makes it read as coming out of the screen rather than in from the wings.
  */
 const HORIZON_OFFSET = 0.07;
-const HORIZON_SCALE = 0.12;
-const HORIZON_LIFT = 34;
+/**
+ * How small and how high the approach starts.
+ *
+ * The entry lasts the whole count-in, which is long enough that it has to begin genuinely
+ * far off: at an eighth of full size it read as a character standing a few paces back
+ * rather than one out on the horizon, and a walk that long from that close reads as slow
+ * rather than distant. Small and high are the same statement made twice — apparent size
+ * and height on the ground plane are the two cues perspective gives, and the lift is what
+ * puts the start of the walk at the vanishing point instead of at the player's feet.
+ */
+const HORIZON_SCALE = 0.05;
+const HORIZON_LIFT = 58;
 
 /**
  * How long an obstacle's reaction lasts once it crosses the launch position.
@@ -789,9 +799,10 @@ export class StageRenderer {
       tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
     }
 
-    // Actions only take hold once it has arrived. A jump thrown while it is still out in
-    // the distance reads as floating rather than leaping, and the entry finishes well
-    // before step 0's own animation is due to start, so nothing is lost by damping them.
+    // Actions only take hold as it arrives. A jump thrown while it is still out in the
+    // distance reads as floating rather than leaping, and scaling them by the depth also
+    // makes the count-in's own hits ramp up into the run rather than switch on. The entry
+    // still finishes ahead of step 0's animation, so the run bar itself is never damped.
     if (depth < 1) {
       pose.jump *= depth;
       pose.hurdle *= depth;
@@ -803,9 +814,15 @@ export class StageRenderer {
 
     // Distance reads as three things at once: smaller, greyer, and closer to the ground
     // line's vanishing point.
-    // Perspective, not linear interpolation: an approach reads as depth when the apparent
-    // size changes fastest while it is far away.
-    const near = depth * depth * (3 - 2 * depth);
+    //
+    // Perspective, not linear interpolation: apparent size changes slowly while something
+    // is far off and fastest as it arrives, so the curve has to accelerate. It used to
+    // ease off at both ends, which over a third of a bar was fine and over a whole one is
+    // not — the walk would reach full size two beats early and then stand there, which is
+    // exactly the standing about the long entry exists to remove. True perspective
+    // (1/distance) accelerates far harder than this, and lands as a lunge at the camera;
+    // this is the readable half of it.
+    const near = depth * Math.sqrt(depth);
     const scale = CHAR_SCALE * (HORIZON_SCALE + (1 - HORIZON_SCALE) * near);
     const groundY = GROUND_Y - (1 - near) * HORIZON_LIFT;
     const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, near);

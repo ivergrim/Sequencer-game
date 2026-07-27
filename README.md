@@ -69,6 +69,8 @@ whatever the last one left behind.
 
 `test/e2e/hint-shot.mjs` is a look rather than a check: it fails the same stage three
 times and captures the death camera on either side of the hint threshold.
+`test/e2e/entry-shot.mjs` is the same kind of thing for the character's walk in, sampled
+at eight even points across the count-in.
 
 `test:e2e:drift` fills the pattern so a hit lands on every step, then records how far the
 derived `stepFloat` sits from the step each hit was scheduled to sound on. That one number
@@ -426,7 +428,23 @@ than across the ground — small, grey and lifted towards the vanishing point, b
 obstacle layer, resolving to full size and full ink as it reaches the launch position. The
 lateral travel is deliberately tiny, because any long slide along the ground reads as
 running past the obstacles whichever layer it is drawn on; the apparent size does the
-work, on a curve that changes fastest while it is far away.
+work, on a curve that accelerates as it arrives the way perspective does.
+
+**The walk in lasts the whole count-in.** It used to take a third of the bar, which left
+the character standing at the launch position for two and a half beats before the run
+began — and the world does not stop for the count, so every obstacle that crossed in that
+window went straight through a character that was not yet running the bar and answered
+none of them. Out in the distance it is drawn behind the obstacle field and nothing
+touches it, so the fix is to still be arriving until the count is over: it starts at a
+twentieth of full size, up at the vanishing point, and reaches the launch position as the
+last beat of the count-in finishes.
+
+It cannot arrive exactly on the downbeat, because two things reach back from it. Step 0's
+action begins 144ms early and is damped away while the character is still distant, and the
+run decision 300ms early puts the phase into RUNNING, which is a character in position by
+definition — an entry still under way at that moment is cut off rather than finished. So
+the walk ends a settling margin before the decision, and the whole of the count before
+that belongs to the approach.
 
 ### Action timing
 

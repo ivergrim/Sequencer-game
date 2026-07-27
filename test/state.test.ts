@@ -118,6 +118,62 @@ describe('the run pattern snapshot', () => {
   });
 });
 
+describe('the entry', () => {
+  /** Arm a run and hand back the absolute bar index the count-in occupies. */
+  function armed() {
+    const { clock, state } = make();
+    state.requestRun();
+    return { clock, state, countInBar: clock.nextBarBoundary(0.15) };
+  }
+
+  it('is still out in the distance for all but the end of the count-in', () => {
+    const { clock, state, countInBar } = armed();
+
+    // Anywhere it has arrived, the world scrolls through a character that is not yet
+    // running the bar and therefore answers none of it. So the approach owns the count.
+    for (const fraction of [0, 0.25, 0.5, 0.75]) {
+      clock.now = clock.timeOfBar(countInBar) + fraction * clock.barDuration;
+      expect(state.characterPose.mode).toBe('entering');
+    }
+  });
+
+  it('arrives when the count ends, with just enough left for step 0', () => {
+    const { clock, state, countInBar } = armed();
+    const runBarTime = clock.timeOfBar(countInBar + 1);
+    const arrival = runBarTime - state.entryHeadroomSeconds;
+
+    clock.now = arrival - 0.001;
+    expect(state.characterPose.mode).toBe('entering');
+    clock.now = arrival + 0.001;
+    expect(state.characterPose.mode).toBe('running');
+
+    // The floor: step 0's action begins `longestActionLead` before the bar line and is
+    // damped away while the character is still distant. The run decision reaches back
+    // further still and puts the character into RUNNING, which would cut the walk off
+    // mid-stride rather than let it finish.
+    expect(state.entryHeadroomSeconds).toBeGreaterThanOrEqual(state.longestActionLead);
+    expect(state.entryHeadroomSeconds).toBeGreaterThan(RUN_DECISION_LEAD);
+    // The ceiling: anything more than a settling margin is time spent standing in the
+    // obstacle field, which is the thing being fixed.
+    expect(state.entryHeadroomSeconds).toBeLessThan(RUN_DECISION_LEAD + 0.1);
+  });
+
+  it('walks the whole way in, once, without turning back', () => {
+    const { clock, state, countInBar } = armed();
+    const arrival = clock.timeOfBar(countInBar + 1) - state.entryHeadroomSeconds;
+
+    let previous = -1;
+    for (let i = 0; i <= 20; i++) {
+      clock.now = clock.timeOfBar(countInBar) + (i / 20) * (arrival - clock.timeOfBar(countInBar));
+      const pose = state.characterPose;
+      const progress = pose.mode === 'entering' ? pose.progress : 1;
+      expect(progress).toBeGreaterThanOrEqual(previous);
+      previous = progress;
+    }
+    expect(previous).toBeCloseTo(1, 6);
+  });
+});
+
 describe('the failure hint', () => {
   /** Run the empty pattern into stage 1's pillar and land in FAILED. */
   function failOnce(clock: StubClock, state: GameState): void {

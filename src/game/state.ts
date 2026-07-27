@@ -65,8 +65,31 @@ export const RUN_DECISION_LEAD = 0.3;
  */
 export const HINT_AFTER_FAILURES = 3;
 
-/** Fraction of the count-in bar the character spends arriving out of the distance. */
-const ENTRY_FRACTION = 0.32;
+/**
+ * How long before the run bar the character is finally at the launch position.
+ *
+ * The approach lasts the whole count-in rather than a third of it. Once it has arrived it
+ * stands in the foreground while the world keeps scrolling, and every obstacle that
+ * crosses in that window passes through it: it is not running that bar, so it answers
+ * none of them. Two beats of that is enough to break the illusion the entry exists to
+ * build. Out in the distance it is drawn behind the obstacle field and nothing touches
+ * it, so the fix is to still be arriving until the count is over.
+ *
+ * It cannot arrive exactly on the bar line, though. Two things reach back from it, and
+ * the arrival has to clear the earlier of them:
+ *
+ * - step 0's action begins `MAX_LEAD_SECONDS` (144ms) before the bar, and an action
+ *   thrown while the character is still out in the distance is damped away with the
+ *   depth, so it has to be standing by then;
+ * - the run decision at `RUN_DECISION_LEAD` (300ms) moves the phase to RUNNING, and a
+ *   RUNNING character is by definition in position. An entry still under way at that
+ *   moment does not finish, it is cut off, so the last of the approach would be a jump
+ *   in size rather than the end of a walk.
+ *
+ * So the walk ends a settling margin before the decision, which is still all but the last
+ * three quarters of a beat of the count.
+ */
+const ENTRY_LEAD_SECONDS = RUN_DECISION_LEAD + 0.06;
 /** Fraction of the success flourish the character spends receding into the distance. */
 const EXIT_FRACTION = 0.38;
 
@@ -380,9 +403,9 @@ export class GameState {
    * Where the character is, and whether the stage draws it at all.
    *
    * The character exists only for the run. During EDITING the world scrolls and the
-   * music plays with an empty stage; it enters from off screen left during the count-in
-   * and arrives at DINO_X at running speed, early enough that an anticipatory action for
-   * step 0 is already under way by the time step 0 lands.
+   * music plays with an empty stage; it comes in out of the distance for the length of
+   * the count-in and reaches DINO_X as the count finishes, early enough that an
+   * anticipatory action for step 0 is already under way by the time step 0 lands.
    */
   get characterPose(): CharacterPose {
     // Once the chapter is done there is nothing left to solve, so the character stays and
@@ -396,8 +419,9 @@ export class GameState {
       case 'armed': {
         const into = this.transport.barFloat - this.countInBar;
         if (into < 0) return { mode: 'hidden', progress: 0 };
-        if (into >= ENTRY_FRACTION) return { mode: 'running', progress: 1 };
-        return { mode: 'entering', progress: into / ENTRY_FRACTION };
+        const fraction = this.entryFraction;
+        if (into >= fraction) return { mode: 'running', progress: 1 };
+        return { mode: 'entering', progress: into / fraction };
       }
 
       case 'running':
@@ -434,11 +458,26 @@ export class GameState {
   /**
    * How long before the run bar the character is in position.
    *
-   * The entry has to finish early enough for step 0's animation to have begun, which for
-   * a 400ms jump means 200ms of lead.
+   * The entry has to finish early enough for step 0's animation to have begun, and no
+   * earlier than it has to: every spare moment is spent still approaching, out in the
+   * distance where the obstacle field cannot pass through it.
    */
   get entryHeadroomSeconds(): number {
-    return (1 - ENTRY_FRACTION) * this.transport.barDuration;
+    return (1 - this.entryFraction) * this.transport.barDuration;
+  }
+
+  /**
+   * Fraction of the count-in bar the approach occupies.
+   *
+   * Derived from the bar rather than fixed, so the entry keeps ending at the same
+   * distance before the downbeat whatever the chapter's tempo is. The floor is there for
+   * a tempo fast enough that the lead is most of a bar; the approach still has to be
+   * long enough to read as one.
+   */
+  private get entryFraction(): number {
+    const bar = this.transport.barDuration;
+    if (!(bar > 0)) return 1;
+    return Math.max(0.3, 1 - ENTRY_LEAD_SECONDS / bar);
   }
 
   /** Progress through the success flourish, 0..1. Drives the character's exit. */
