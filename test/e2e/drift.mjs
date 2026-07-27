@@ -66,14 +66,19 @@ await page.evaluate(() => {
   };
 
   // Watch the sequencer playhead against the same derived position.
-  window.__playhead = { max: 0 };
+  //
+  // This can only ever measure the render pipeline: the playhead is written from
+  // stepFloat during the frame and committed at the next paint, so a sample compares a
+  // committed value against a newer clock read. The absolute number is display latency,
+  // not drift. What proves there is no drift is that it does not grow.
+  const playhead = [];
+  window.__playhead = playhead;
   const el = document.querySelector('.seq-playhead');
   const watch = () => {
     const shown = parseFloat(getComputedStyle(el).getPropertyValue('--step'));
-    const live = transport.stepFloat;
-    let delta = Math.abs(shown - live);
+    let delta = Math.abs(shown - transport.stepFloat);
     if (delta > chapter.patternLength / 2) delta = chapter.patternLength - delta;
-    if (delta > window.__playhead.max) window.__playhead.max = delta;
+    playhead.push({ t: transport.elapsed, delta });
     requestAnimationFrame(watch);
   };
   requestAnimationFrame(watch);
@@ -99,8 +104,14 @@ const result = await page.evaluate(() => {
   const worst = (rows) => Math.max(...rows.map((r) => Math.abs(r.stepError)));
   const worstLag = (rows) => Math.max(...rows.map((r) => Math.abs(r.releaseLag)));
 
+  const head = window.__playhead;
+  const headLast = head[head.length - 1].t;
+  const headWorst = (rows) => Math.max(...rows.map((r) => r.delta));
+
   return {
     count: samples.length,
+    playheadFirst: headWorst(head.filter((r) => r.t <= window30)),
+    playheadFinal: headWorst(head.filter((r) => r.t >= headLast - window30)),
     elapsed: transport.elapsed,
     stepDuration: transport.stepDuration,
     firstWorst: worst(first),
@@ -110,7 +121,6 @@ const result = await page.evaluate(() => {
     overallWorst: worst(samples),
     anchorMoved,
     barTimeError,
-    playheadWorst: window.__playhead.max,
     derivedExact: (() => {
       // stepFloat must be exactly the value the brief specifies, still, after minutes.
       const expected =
@@ -134,9 +144,14 @@ check(
   `${result.derivedExact}`,
 );
 check(
-  'the playhead still tracks the derived position',
-  result.playheadWorst < frame * 2,
-  `worst ${result.playheadWorst.toFixed(4)} steps`,
+  'the playhead still lines up after ' + MINUTES + ' minutes',
+  result.playheadFinal <= result.playheadFirst + frame,
+  `${result.playheadFirst.toFixed(4)} -> ${result.playheadFinal.toFixed(4)} steps`,
+);
+check(
+  'the playhead stays within the render pipeline latency',
+  result.playheadFinal < frame * 4,
+  `worst ${result.playheadFinal.toFixed(4)} steps, one frame is ${frame.toFixed(3)}`,
 );
 check(
   'hits land on their step at the start',

@@ -192,6 +192,58 @@ check(
   check('the monitor actually sampled', monitor.samples > 1000, `${monitor.samples} frames`);
 }
 
+// ---------------------- it actually makes sound, with public/stems/ empty
+{
+  // Twenty-one drum notes and ten backing layers are running by now, and every one of
+  // those layers is a synthesized substitute, because public/stems/ is empty. Tap both
+  // buses and confirm signal is coming out of each.
+  const level = await page.evaluate(async () => {
+    const { ctx, drumBus, stemBus } = window.__debug;
+
+    const tap = (node) => {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      node.connect(analyser);
+      return analyser;
+    };
+
+    const drums = tap(drumBus);
+    const stems = tap(stemBus);
+    const out = tap(window.__debug.limiter);
+    const buffer = new Float32Array(2048);
+
+    const peaks = { drums: 0, stems: 0, out: 0 };
+    for (let i = 0; i < 160; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      for (const [key, analyser] of [
+        ['drums', drums],
+        ['stems', stems],
+        ['out', out],
+      ]) {
+        analyser.getFloatTimeDomainData(buffer);
+        for (const sample of buffer) {
+          const amplitude = Math.abs(sample);
+          if (amplitude > peaks[key]) peaks[key] = amplitude;
+        }
+      }
+    }
+    return { ...peaks, stemsAreFallbacks: !window.__debug.stems.hasBuffer('bass') };
+  });
+
+  check('the stems directory really is empty', level.stemsAreFallbacks === true);
+  check('the drum voices make sound', level.drums > 0.01, `peak ${level.drums.toFixed(3)}`);
+  check(
+    'the synthesized backing bed makes sound',
+    level.stems > 0.01,
+    `peak ${level.stems.toFixed(3)}`,
+  );
+  check(
+    'the full mix does not clip',
+    level.out > 0.01 && level.out <= 1,
+    `peak ${level.out.toFixed(3)}`,
+  );
+}
+
 check('no unexpected console errors', errors.length === 0, errors.join(' | '));
 
 console.log('\nstages played:');

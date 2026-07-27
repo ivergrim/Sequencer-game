@@ -12,6 +12,7 @@
 
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
+let limiter: DynamicsCompressorNode | null = null;
 let drumBus: GainNode | null = null;
 let stemBus: GainNode | null = null;
 
@@ -19,12 +20,22 @@ export function getContext(): AudioContext {
   if (!context) {
     context = new AudioContext({ latencyHint: 'interactive' });
 
+    // A stage can stack several voices on one step by design: a kick, a clap and an
+    // open hat all land on step 12 by stage 10. Their sum clips without this.
+    limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    limiter.connect(context.destination);
+
     master = context.createGain();
-    master.gain.value = 0.9;
-    master.connect(context.destination);
+    master.gain.value = 0.85;
+    master.connect(limiter);
 
     drumBus = context.createGain();
-    drumBus.gain.value = 0.85;
+    drumBus.gain.value = 0.7;
     drumBus.connect(master);
 
     stemBus = context.createGain();
@@ -32,6 +43,12 @@ export function getContext(): AudioContext {
     stemBus.connect(master);
   }
   return context;
+}
+
+/** The last node before the destination. Nothing should peak past 1 after it. */
+export function getLimiter(): DynamicsCompressorNode {
+  getContext();
+  return limiter!;
 }
 
 export function getDrumBus(): GainNode {

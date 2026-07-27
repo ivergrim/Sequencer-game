@@ -192,3 +192,38 @@ before the animation starts; the animation presents an already-decided result.
 The solution to a stage is never authored. It is derived from the obstacle set through
 `OBSTACLE_INSTRUMENT`, so a stage is placed obstacles and nothing else. There is no
 answer key anywhere in the repo.
+
+### Signal path
+
+```
+drum voices ──▶ drum bus (0.7) ─┐
+                                ├─▶ master (0.85) ──▶ limiter ──▶ destination
+backing layers ─▶ stem bus (0.5)┘
+```
+
+A stage can stack several voices on one step by design — by stage 10 a kick, a clap and
+an open hat all land on step 12 — so the limiter is there to keep the sum under one
+rather than to shape the sound.
+
+### Known limitation
+
+Browsers throttle `setInterval` to roughly once a second in a background tab while the
+audio clock keeps running. The scheduler skips whatever went past due rather than firing
+a burst of it on return, so the transport resumes exactly in phase and nothing drifts,
+but the backing can gap while the tab is hidden. Fixing it properly means moving the
+scheduler into an `AudioWorklet` or a `Worker`, which is beyond this prototype.
+
+## Verifying the acceptance criteria
+
+| # | Criterion | Where it is checked |
+|---|---|---|
+| 1 | Runs and makes sound with `public/stems/` empty | `test:e2e` taps the drum and stem buses and asserts signal on both |
+| 2 | No drift after five minutes | `test:e2e:drift` |
+| 3 | Stage 3 clears only with kick on 0, 4, 8, 12 | `test/chapter1.test.ts` |
+| 4 | Removing a carried-over note fails at that step | `test/simulate.test.ts` and `test:e2e` |
+| 5 | The budget blocks over-placing | `test:e2e` |
+| 6 | Music and scroll never stop, stage 1 to 10 | `test:e2e` monitors the transport for the whole session |
+| 7 | `simulate()` is pure and unit tested | `test/simulate.test.ts` |
+| 8 | No hitbox or physics code | `grep -rniE "hitbox\|intersect\|collide\|bounding\|physics\|velocity\|gravity" src/` |
+| 9 | `wrangler deploy` produces a working URL | Needs Cloudflare credentials; `npx wrangler deploy --dry-run` validates the config without them |
+| 10 | A push to `main` deploys | Needs Workers Builds connected in the dashboard, see above |

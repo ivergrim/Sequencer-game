@@ -1,4 +1,4 @@
-import { getContext, getStemBus } from './context';
+import { getContext, getNoiseBuffer, getStemBus } from './context';
 
 /**
  * Backing layers.
@@ -142,11 +142,10 @@ const FALLBACKS: Record<string, BarScheduler> = {
     const ctx = getContext();
     const barLength = step * 16;
     const source = ctx.createBufferSource();
-    const length = Math.ceil(ctx.sampleRate * barLength);
-    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
-    source.buffer = buffer;
+    // The shared noise buffer, looped to cover a bar of any length, rather than a fresh
+    // bar-sized buffer allocated every bar for the life of the session.
+    source.buffer = getNoiseBuffer();
+    source.loop = true;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';

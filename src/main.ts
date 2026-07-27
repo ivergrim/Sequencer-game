@@ -1,6 +1,6 @@
 import './style.css';
 
-import { unlockAudio } from './audio/context';
+import { getDrumBus, getLimiter, getStemBus, unlockAudio } from './audio/context';
 import { triggerCountIn, triggerDrum } from './audio/drums';
 import { Stems } from './audio/stems';
 import { Transport } from './audio/transport';
@@ -119,6 +119,9 @@ async function start(): Promise<void> {
         stage,
         chapter,
         ctx,
+        drumBus: getDrumBus(),
+        stemBus: getStemBus(),
+        limiter: getLimiter(),
         solution: () => requiredNotes(state.obstacles),
       },
     });
