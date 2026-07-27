@@ -236,6 +236,17 @@ stage rather than to a timer, so it is still there however long the player takes
 the moment it is solved. The bob is a position change and never a size one, because size
 is reserved for weight and must never track age.
 
+The announcement swell is deliberately anisotropic: almost all of the punch goes sideways,
+where there is nothing to collide with, and the vertical component stays inside the gaps
+between bands. A uniform swell large enough to be unmissable also grows each obstacle into
+its neighbours' bands, which would break the separation at exactly the moment the player
+is looking. `test/bands.test.ts` pins that the bands stay disjoint at the peak of the
+swell, including on the five steps of chapter 1 that stack obstacles.
+
+Once the chapter is cleared there is nothing left to solve, so the character stays on
+stage and performs the finished track for good — no exit, no empty stage, and no obstacle
+still marked as the current stage's business.
+
 The two depth systems below stay deliberately independent, so they can never multiply and
 bury the oldest small obstacles:
 

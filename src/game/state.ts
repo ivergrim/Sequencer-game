@@ -289,6 +289,10 @@ export class GameState {
    * step 0 is already under way by the time step 0 lands.
    */
   get characterPose(): CharacterPose {
+    // Once the chapter is done there is nothing left to solve, so the character stays and
+    // performs the finished track for good: no exit, no entry, no empty stage.
+    if (this.complete && this.phase !== 'failed') return { mode: 'running', progress: 1 };
+
     switch (this.phase) {
       case 'editing':
         return { mode: 'hidden', progress: 0 };
@@ -304,6 +308,12 @@ export class GameState {
         return { mode: 'running', progress: 1 };
 
       case 'success': {
+        // The run that clears the last stage does not exit. `complete` is only set when
+        // the stage actually advances, so without this the character would recede into
+        // the distance and then pop straight back in.
+        if (this.stageIndex + 1 >= this.chapter.stages.length) {
+          return { mode: 'running', progress: 1 };
+        }
         const progress = this.successProgress / EXIT_FRACTION;
         return progress >= 1
           ? { mode: 'hidden', progress: 1 }

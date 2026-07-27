@@ -112,8 +112,17 @@ const HORIZON_LIFT = 34;
  */
 const REACTION_SECONDS = 0.22;
 
-/** How far an obstacle swells as it crosses the launch position. */
-const SWELL = 0.34;
+/**
+ * How far an obstacle swells as it crosses the launch position.
+ *
+ * Anisotropic, and not for style. A uniform swell big enough to be unmissable also grows
+ * each obstacle into its neighbours' bands, which breaks the guaranteed vertical
+ * separation at exactly the moment the player is looking at it. Almost all of the punch
+ * goes sideways, where there is nothing to collide with; the vertical component stays
+ * inside the gaps between bands. `test/bands.test.ts` pins that.
+ */
+export const SWELL_X = 0.75;
+export const SWELL_Y = 0.12;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
@@ -273,6 +282,10 @@ export class StageRenderer {
     const current = frame.obstacles.filter((o) => isCurrent(o, frame.currentStage));
     for (const obstacle of [...byDepth(receded), ...byDepth(current)]) {
       const foreground = isCurrent(obstacle, frame.currentStage);
+      // Marking is for the stage's own new obstacles. On completion there is no current
+      // stage and everything returns to full opacity, which must not mean every one of
+      // the twenty-one sprouts a caret.
+      const marked = frame.currentStage !== null && obstacle.stage === frame.currentStage;
       const reaction = reactionAt(obstacle.step, stepFloat, frame.patternLength, frame.stepDuration);
       this.eachWrap(obstacle.step, stepFloat, frame.patternLength, cell, dinoX, w, (x) => {
         this.drawObstacle(
@@ -282,6 +295,7 @@ export class StageRenderer {
           foreground ? 1 : RECEDED_ALPHA,
           foreground,
           reaction,
+          marked,
         );
       });
     }
@@ -466,6 +480,7 @@ export class StageRenderer {
     alpha: number,
     foreground: boolean,
     reaction: number | null,
+    marked: boolean,
   ): void {
     const { g } = this;
     const rise = clamp01((now - obstacle.addedAt) / RISE_SECONDS);
@@ -494,7 +509,7 @@ export class StageRenderer {
 
     // Everything this stage introduced bobs gently and wears a caret, for as long as it
     // is the current stage's business.
-    if (foreground) {
+    if (marked) {
       const bob = Math.sin(now * ARRIVAL_BOB_HZ * Math.PI * 2) * ARRIVAL_BOB;
       g.translate(0, bob);
       caret(g, x, top - 16);
@@ -503,11 +518,11 @@ export class StageRenderer {
     // The obstacle announces itself as it crosses the launch position: a quick swell and
     // snap back, pivoting on its base so a grounded shape never lifts off the ground.
     if (reaction !== null) {
-      const swell = 1 + pop(reaction) * SWELL;
+      const punch = pop(reaction);
       const pivotY = grounded ? bottom : (bottom + top) / 2;
       g.save();
       g.translate(x, pivotY);
-      g.scale(swell, swell);
+      g.scale(1 + punch * SWELL_X, 1 + punch * SWELL_Y);
       g.translate(-x, -pivotY);
       drawShape(g, obstacle.type, x, bottom, top);
       g.restore();
