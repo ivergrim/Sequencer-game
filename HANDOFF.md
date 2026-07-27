@@ -27,9 +27,13 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
 - **Repo**: `ivergrim/Sequencer-game` on GitHub. Owner: ivergrim (ivergrim@gmail.com).
 - **Branches**: work is developed on a `claude/*` branch and pushed to **both** that
   branch and `main` (`git push origin HEAD:main`) after each verified chunk. The two are
-  kept identical. GitHub's default branch is still an old claude branch — the user has
-  never flipped it, and it needs a dashboard change (Settings → Branches → default
-  branch → `main`); no MCP tool exposes it.
+  kept identical — the session branch is where the harness requires work to land, and
+  `main` is what deploys; it is not a divergent line of work. GitHub's default branch
+  **is** `main` now (confirmed via the API, `default_branch: main`); the older note
+  saying otherwise was stale.
+  - Old session branches (`claude/handoff-previous-chat-js1l1d`,
+    `claude/prototype-brief-review-wg8611`) are fully merged into `main` and hold
+    nothing. They are the user's to delete; do not delete a remote branch unasked.
 - **Deploy**: Cloudflare **Workers with static assets** (not Pages). Worker name in
   `wrangler.toml` is `sequencer-game` — this MUST match the worker the user created in
   the dashboard (`sequencer-game.ivergrim.workers.dev`). It was originally
