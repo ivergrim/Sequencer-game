@@ -181,11 +181,20 @@ chips are dropped on a touch device, which leaves plain buttons.
 
 **Run is a banner above the stage**, not a button in the row under the sequencer, because
 it is the one control a player has to find and the row under the sequencer is the last
-place they look. Full width, one line tall. It stays in the layout while a run is under
-way rather than hiding — resizing the canvas at the moment the player starts watching the
-world is exactly the wrong time to move it — and goes inert, reporting the phase. It
-reads the same in EDITING and after a failure, and it retires entirely in free play,
-where there is nothing to run against.
+place they look. Full width, one line tall.
+
+The banner is the offer of a run and nothing else, so it is gone for as long as one is
+under way, and back the moment it resolves. It goes by `visibility` rather than by
+leaving the layout: reflowing the page would resize the canvas at the exact moment the
+player has started watching the world, and against a uniform paper background a reserved
+gap and an absence look the same. `test:e2e` checks both halves — that the banner goes,
+and that the stage does not move a pixel when it does.
+
+It behaves identically in EDITING and after a failure, which is the same rule the
+sequencer follows: the death camera names the obstacle, and a banner that changed after a
+failure would give away for free that there is something to find. FAILED is also the
+phase R exists for, so the banner has to be pressable under the camera. In free play it
+retires for good, along with runs themselves.
 
 Progress is saved continuously to `localStorage` and restored on load. A save from an
 older build, or a corrupted one, is discarded rather than trusted, so an incompatible

@@ -147,10 +147,13 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   like the others — do not put a key chip inside the element whose textContent gets
   replaced).
   - **`#run` is a full-width banner above the canvas**, outside `#controls`; `button()`
-    looks it up across the document for that reason. While a run is in flight it stays
-    in the layout (moving it would resize the canvas mid-run) and goes `disabled` with
-    `data-live="false"`, reporting `count in` / `running` / `clear`. EDITING and FAILED
-    both read `run` — nothing outside the stage may reveal a failure.
+    looks it up across the document for that reason. It is the offer of a run: in
+    ARMED/RUNNING/SUCCESS it goes `disabled` with `data-live="false"`, which is
+    `visibility: hidden` — **not** `display:none`, because leaving the layout would
+    resize the canvas mid-run. `test:e2e` pins that the stage's box does not move.
+    EDITING and FAILED both show it (nothing outside the stage may reveal a failure, and
+    FAILED is what R is for). Free play uses `hidden`, which does leave the layout — that
+    one never comes back.
   - The separate `#hints` legend is **deleted**. Each button carries its own `<kbd>`
     chips in a `.keys` span; `@media (pointer: coarse)` hides `.keys`, which is what the
     responsive suite now checks instead of `#hints`. The `click / toggle` hint went with

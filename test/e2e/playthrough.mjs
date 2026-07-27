@@ -129,16 +129,44 @@ await installMonitor();
 
 // ------------------------------------ the sequencer never changes for run state
 {
+  // The banner offers the run, so it is only there when there is one to offer. It goes
+  // by visibility rather than by leaving the layout, so the canvas below it must not
+  // move by a pixel while it does.
+  const bannerBox = () =>
+    page.evaluate(() => {
+      const run = document.querySelector('#run');
+      const stage = document.querySelector('#stage');
+      return {
+        visible: getComputedStyle(run).visibility === 'visible',
+        height: run.getBoundingClientRect().height,
+        stageTop: stage.getBoundingClientRect().top,
+        stageHeight: stage.getBoundingClientRect().height,
+      };
+    });
+
   const idle = await page.evaluate(() => document.querySelector('.seq-grid').className);
+  const bannerIdle = await bannerBox();
   await page.keyboard.press('Space');
   await page.waitForFunction(() => window.__debug.state.phase === 'running', null, {
     timeout: 15_000,
   });
   const running = await page.evaluate(() => document.querySelector('.seq-grid').className);
+  const bannerRunning = await bannerBox();
   check('the grid looks the same while a run is in flight', idle === running, `${idle} / ${running}`);
+  check('the run banner is there to be pressed while editing', bannerIdle.visible);
+  check('the run banner goes once the run starts', bannerRunning.visible === false);
+  check(
+    'and the stage does not move when it does',
+    bannerRunning.stageTop === bannerIdle.stageTop &&
+      bannerRunning.stageHeight === bannerIdle.stageHeight,
+    `top ${bannerIdle.stageTop} -> ${bannerRunning.stageTop}, height ${bannerIdle.stageHeight} -> ${bannerRunning.stageHeight}`,
+  );
+
   await page.waitForFunction(() => window.__debug.state.phase === 'editing', null, {
     timeout: 25_000,
   });
+  const bannerAfter = await bannerBox();
+  check('and it comes back when the run resolves', bannerAfter.visible);
 }
 
 /**

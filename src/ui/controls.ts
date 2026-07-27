@@ -11,8 +11,13 @@ import type { GameState, Phase } from '../game/state';
  *
  * Run is not in the row. It lives above the stage as a banner, because it is the one
  * control a player has to find and the row under the sequencer is the last place they
- * look. While a run is in flight the banner goes inert and reports the phase instead of
- * disappearing, so the canvas never shifts under a run that is already being watched.
+ * look. The banner is the offer of a run and nothing else: the moment one is under way
+ * there is no offer to make, so it goes. It comes back when the run resolves, including
+ * under the death camera, where R is the retry.
+ *
+ * It goes by `visibility` rather than by leaving the layout. Reflowing the page would
+ * resize the canvas at the exact moment the player has started watching the world, and
+ * against a uniform paper background a reserved gap and an absence look the same.
  *
  * Buttons blur themselves after a click: left focused, the next Space would re-trigger
  * the button rather than reaching the window handler that arms a run.
@@ -28,33 +33,27 @@ interface ControlActions {
 const RESTART_ARM_MS = 3000;
 
 /**
- * What the banner reads while a run is under way.
+ * The phases in which there is a run to offer.
  *
- * EDITING and FAILED are deliberately absent, so both fall through to the offer to run.
- * Nothing outside the stage may say that a run failed: the death camera names the
- * obstacle, and the banner going quiet or changing colour on a failure would hand over
- * for free the fact that there is something to find.
+ * FAILED is one of them, and reads exactly as EDITING does. Nothing outside the stage may
+ * say that a run failed — the death camera names the obstacle, and a banner that behaved
+ * differently after a failure would hand over for free the fact that there is something
+ * to find. It is also the phase R exists for.
  */
-const IN_FLIGHT: Partial<Record<Phase, string>> = {
-  armed: 'count in',
-  running: 'running',
-  success: 'clear',
-};
+const OFFERS_A_RUN: ReadonlySet<Phase> = new Set<Phase>(['editing', 'failed']);
 
 export class Controls {
   private readonly run: HTMLButtonElement;
-  private readonly runLabel: HTMLElement;
   private readonly restart: HTMLButtonElement;
   private readonly restartLabel: HTMLElement;
   private readonly restartText: string;
 
   private armed: number | null = null;
   private shownComplete: boolean | null = null;
-  private shownRunLabel = '';
+  private shownLive: boolean | null = null;
 
   constructor(root: HTMLElement, actions: ControlActions) {
     this.run = button(root, 'run', 'run');
-    this.runLabel = labelOf(this.run);
     const clear = button(root, 'clear', 'clear');
     this.restart = button(root, 'restart', 'restart chapter');
     this.restartLabel = labelOf(this.restart);
@@ -90,19 +89,16 @@ export class Controls {
   update(state: GameState): void {
     if (this.shownComplete !== state.complete) {
       this.shownComplete = state.complete;
-      // Free play has no obstacles, so a run has nothing to succeed or fail against.
+      // Free play has no obstacles, so a run has nothing to succeed or fail against. This
+      // one never comes back, so it leaves the layout for good rather than going blank.
       this.run.hidden = state.complete;
     }
 
-    const label = IN_FLIGHT[state.phase] ?? 'run';
-    if (label === this.shownRunLabel) return;
-    this.shownRunLabel = label;
-    this.runLabel.textContent = label;
-
-    // `live` is the whole of the banner's state: pressable, marked and quietly breathing,
-    // or inert and reporting. Disabled rather than merely styled, so a press during a
-    // count-in cannot look like it did something.
-    const live = label === 'run';
+    const live = OFFERS_A_RUN.has(state.phase);
+    if (live === this.shownLive) return;
+    this.shownLive = live;
+    // Disabled as well as invisible, so nothing can be tabbed to or clicked through
+    // while a run it cannot affect is playing out.
     this.run.disabled = !live;
     this.run.dataset.live = String(live);
   }

@@ -390,9 +390,10 @@ kbd {
  * still small — this is a strip, not a splash screen — but impossible to miss, and a real
  * button so a phone can press it.
  *
- * It never leaves the layout while the chapter is unfinished. Hiding it during a run
- * would resize the canvas at the exact moment the player is watching the world, so it
- * goes inert and reports the phase instead.
+ * It is the offer of a run and nothing more, so it is gone for as long as one is under
+ * way. It goes by `visibility` rather than by leaving the layout: reflowing the page
+ * would resize the canvas at the exact moment the player has started watching the world,
+ * and against a uniform paper background a reserved gap and an absence look the same.
  */
 #run {
   display: flex;
@@ -430,26 +431,11 @@ kbd {
   border-bottom: 6px solid transparent;
 }
 
-/*
- * Inert: a run is already under way. Kept exactly the same size so nothing moves, and
- * quiet enough that the stage has the player's attention rather than this.
- */
+/* A run is under way: the offer is withdrawn until it resolves. The box stays, so the
+   canvas below it does not move; there is simply nothing in it. */
 #run[data-live="false"] {
-  border-color: var(--line-soft);
-  color: var(--line);
-  cursor: default;
-  animation: none;
-}
-
-/* Hidden rather than removed, both of them: the label is centred, so dropping anything
-   beside it would slide the word sideways every time a run starts. */
-#run[data-live="false"] .mark,
-#run[data-live="false"] .keys {
   visibility: hidden;
-}
-
-#run[data-live="false"]:hover {
-  background: none;
+  animation: none;
 }
 
 /* Inset spread rather than a background, so hovering still reads over the breath. */
