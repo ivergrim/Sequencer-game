@@ -49,8 +49,16 @@ export interface CharacterPose {
 export interface Failure {
   step: number;
   instrument: Instrument;
-  /** Audio-clock time of the collision, for the stumble and the ground marker. */
+  /**
+   * Audio-clock time the camera took over, which is `DEATH_CAMERA.replay` seconds of
+   * world time *before* the collision. The approach decelerates into the impact from
+   * here rather than being rewound after it.
+   */
   at: number;
+  /** Absolute step position the world had reached when the camera took over. */
+  fromStep: number;
+  /** Absolute step position of the collision itself. */
+  collisionStep: number;
 }
 
 export interface StateEvents {
@@ -230,8 +238,13 @@ export class GameState {
             this.phase = 'success';
           }
         } else {
-          const collision = this.runBar * this.chapter.patternLength + result.failStep;
-          if (this.transport.absoluteStepFloat >= collision) this.fail(result.failStep, result.missing);
+          // Hand over to the camera a little before the impact, so the approach can
+          // decelerate into it. Rewinding after the fact reads as a jerk backwards.
+          const collisionStep = this.runBar * this.chapter.patternLength + result.failStep;
+          const collisionTime = this.transport.timeOfStep(collisionStep);
+          if (this.transport.now >= collisionTime - DEATH_CAMERA.replay) {
+            this.fail(result.failStep, result.missing, collisionStep);
+          }
         }
         break;
       }
@@ -322,8 +335,17 @@ export class GameState {
     this.phase = 'running';
   }
 
-  private fail(step: number, instrument: Instrument): void {
-    this.failure = { step, instrument, at: this.transport.now };
+  private fail(step: number, instrument: Instrument, collisionStep: number): void {
+    this.failure = {
+      step,
+      instrument,
+      at: this.transport.now,
+      // Where the world actually is right now, so the camera can take over without a
+      // discontinuity even when the collision is close enough that there is no room to
+      // decelerate — a failure on step 0 hands over exactly at the impact.
+      fromStep: Math.min(this.transport.absoluteStepFloat, collisionStep),
+      collisionStep,
+    };
     this.runResult = null;
     this.phase = 'failed';
     this.events.onFail?.(this.failure);

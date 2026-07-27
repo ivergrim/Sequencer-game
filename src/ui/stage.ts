@@ -38,7 +38,16 @@ const RECEDED_INK = '#7d7d7d';
 
 export const STAGE_HEIGHT = 360;
 const GROUND_Y = 292;
-const DINO_FRACTION = 0.15;
+/**
+ * Where the launch position sits across the stage.
+ *
+ * The brief said roughly 15%, but that leaves an obstacle only about two and a half steps
+ * of screen after it crosses, so its reaction plays out just as it exits and is easy to
+ * miss. At 28% it has around four and a half steps to react in, and the whole focal point
+ * sits away from the edge. The cost is lookahead, and there is plenty to spare: about
+ * eleven and a half steps of the bar are still visible ahead of it.
+ */
+const DINO_FRACTION = 0.28;
 
 /** How far a receded obstacle drops in opacity. A hard floor, so small types survive it. */
 const RECEDED_ALPHA = 0.5;
@@ -67,6 +76,9 @@ const RISE_SECONDS = 0.6;
  * bar for free, and cannot drift.
  */
 const REACTION_SECONDS = 0.22;
+
+/** Period of the culprit's red breath under the death camera. */
+const CULPRIT_PULSE_SECONDS = 1.1;
 
 /** Ground litter, deliberately off the sixteenth grid so it can never read as one. */
 const PEBBLES = [0.031, 0.107, 0.183, 0.271, 0.339, 0.427, 0.518, 0.603, 0.689, 0.771, 0.858, 0.941];
@@ -151,6 +163,7 @@ export class StageRenderer {
 
   /** Introspection for the browser checks. Nothing in the app reads these. */
   characterDrawn = false;
+  lastStageStep = 0;
   lastPose: Pose = emptyPose();
   lastCulprit: { type: ObstacleType; alpha: number; grown: boolean } | null = null;
 
@@ -193,6 +206,8 @@ export class StageRenderer {
     // sequencer playhead carry on untouched.
     const camera = this.cameraState(frame);
     const stepFloat = camera ? camera.stepFloat : frame.stepFloat;
+
+    this.lastStageStep = stepFloat;
 
     g.fillStyle = PAPER;
     g.fillRect(0, 0, w, STAGE_HEIGHT);
@@ -240,7 +255,7 @@ export class StageRenderer {
       );
       if (culprit) {
         this.eachWrap(culprit.step, stepFloat, frame.patternLength, cell, dinoX, w, (x) =>
-          this.drawCulprit(culprit, x),
+          this.drawCulprit(culprit, x, camera.elapsed),
         );
       }
     } else {
@@ -261,11 +276,21 @@ export class StageRenderer {
     const elapsed = frame.now - frame.failure.at;
     if (elapsed < 0 || elapsed > DEATH_CAMERA.total) return null;
 
-    // Rewind by the replayed slice of approach, then run it forward at a fraction of
-    // speed until it reaches the collision, and hold there.
-    const rewind = DEATH_CAMERA.replay / frame.stepDuration;
-    const progress = Math.min(1, elapsed / DEATH_CAMERA.slowmo);
-    return { stepFloat: frame.failure.step - rewind * (1 - progress), elapsed };
+    // Decelerate into the impact rather than rewinding to it. The camera takes over at
+    // the world's real position, so there is no jump at the hand-over, and eases to a
+    // stop exactly on the collision.
+    //
+    // The exponent is what makes the hand-over seamless. Covering `replay` seconds of
+    // world time in `slowmo` seconds of real time means the average speed is
+    // replay/slowmo of normal, so some slowing is unavoidable; raising (1 - u) to
+    // slowmo/replay makes the curve leave at exactly normal speed and arrive at zero.
+    const { fromStep, collisionStep } = frame.failure;
+    const u = Math.min(1, elapsed / DEATH_CAMERA.slowmo);
+    const remaining = Math.pow(1 - u, DEATH_CAMERA.slowmo / DEATH_CAMERA.replay);
+    const absolute = collisionStep - (collisionStep - fromStep) * remaining;
+
+    const length = frame.patternLength;
+    return { stepFloat: ((absolute % length) + length) % length, elapsed };
   }
 
   // --------------------------------------------------------------- placement
@@ -440,10 +465,13 @@ export class StageRenderer {
 
   /**
    * The culprit under the death camera: full opacity, foreground layer and full size,
-   * with a highlight ring. A shaker that killed you is drawn large, not merely
-   * brightened. This overriding both weight and depth is the point of the camera.
+   * overriding both its weight and its depth state. A shaker that killed you is drawn
+   * large, not merely brightened.
+   *
+   * The shape itself carries a red tint that breathes, rather than being ringed. A drawn
+   * ring points at the answer; a tinted shape lets the obstacle be the thing you notice.
    */
-  private drawCulprit(obstacle: RenderObstacle, x: number): void {
+  private drawCulprit(obstacle: RenderObstacle, x: number, elapsed: number): void {
     const { g } = this;
     const band = BANDS[obstacle.type];
     const bottom = GROUND_Y - band.bottom;
@@ -457,16 +485,13 @@ export class StageRenderer {
       grown: grown > natural || WEIGHT[obstacle.type] !== 'large',
     };
 
+    // A slow breath, so it reads as alive without ever flashing.
+    const breath = 0.5 + 0.5 * Math.sin((elapsed / CULPRIT_PULSE_SECONDS) * Math.PI * 2);
+
     g.save();
     g.globalAlpha = 1;
-    g.fillStyle = INK;
+    g.fillStyle = mixInk(INK, FAIL, 0.4 + breath * 0.45);
     drawShape(g, obstacle.type, x, bottom, top, 'large');
-
-    g.strokeStyle = FAIL;
-    g.lineWidth = 2.5;
-    g.beginPath();
-    g.arc(x, (bottom + top) / 2, grown * 0.8, 0, Math.PI * 2);
-    g.stroke();
     g.restore();
   }
 
@@ -549,14 +574,16 @@ export class StageRenderer {
     } else if (mode === 'exiting') {
       offsetX = ease(frame.character.progress) * (w - dinoX + 140);
     } else if (mode === 'down' && camera) {
-      tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo * 0.55) / 0.45);
+      tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
     }
 
-    // While tumbling the character stays at the collision point: the death camera is
-    // about identifying the culprit, and a body sliding away from it works against that.
-    const lunge = tumble > 0 ? 0 : pose.dash * DASH_DISTANCE + pose.sidestep * SIDESTEP;
+    // Any action still in flight settles out over the tumble instead of being cut, so a
+    // character caught mid-air comes down rather than snapping to the ground. It also
+    // ends up back at the collision point, which is what the camera is there to show.
+    const settle = 1 - tumble;
+    const lunge = (pose.dash * DASH_DISTANCE + pose.sidestep * SIDESTEP) * settle;
     const x = dinoX + offsetX + lunge;
-    const y = GROUND_Y - (tumble > 0 ? 0 : pose.jump) * JUMP_HEIGHT;
+    const y = GROUND_Y - pose.jump * JUMP_HEIGHT * settle;
 
     if (pose.dash > 0.15 && tumble === 0) {
       g.strokeStyle = LIGHT;
@@ -656,6 +683,17 @@ export function reactionAt(
   const sinceSteps = (((stepFloat - step) % patternLength) + patternLength) % patternLength;
   const t = (sinceSteps * stepDuration) / REACTION_SECONDS;
   return t < 1 ? t : null;
+}
+
+/** Blend two hex colours, for the culprit's tint. */
+function mixInk(from: string, to: string, t: number): string {
+  const k = clamp01(t);
+  const channel = (offset: number) => {
+    const a = parseInt(from.slice(offset, offset + 2), 16);
+    const b = parseInt(to.slice(offset, offset + 2), 16);
+    return Math.round(a + (b - a) * k);
+  };
+  return `rgb(${channel(1)}, ${channel(3)}, ${channel(5)})`;
 }
 
 /** Fast attack, slower release. Peaks around a quarter of the way in. */

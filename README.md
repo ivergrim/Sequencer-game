@@ -195,6 +195,13 @@ stepFloat = (elapsed / stepDuration) % patternLength
 
 and derives the playhead, every obstacle position and the character from `stepFloat`.
 
+**The death camera decelerates into the impact.** It takes over `DEATH_CAMERA.replay`
+seconds of world time *before* the collision, at the world's real position, and eases to
+a stop exactly on it. Rewinding to the collision after the fact — which is the literal
+reading of "dilate the last 200ms of approach" — puts a backwards jump of a step and a
+half on a single frame. `test/e2e/patch1.mjs` traces the hand-over and fails on any
+backwards motion.
+
 **Collision is a table lookup.** There is no hitbox test and no physics anywhere in
 this repo. At step N an obstacle either requires instrument I or it does not, and the
 pattern at step N either contains I or does not. The run outcome is computed in full
@@ -221,7 +228,10 @@ There is no hit line, and no step grid. Two things carry it instead.
 
 The **launch position is worn into the terrain** — a patch of bare ground with a few
 scuff marks, in the same idiom as the ground litter. It is the one thing on the ground
-that does not scroll, which is what makes it read as a place rather than as scenery.
+that does not scroll, which is what makes it read as a place rather than as scenery. It
+sits at 28% of the width rather than the brief's 15%: further left, an obstacle has only
+about two and a half steps of screen left after crossing, so its reaction plays out just
+as it exits.
 
 Every obstacle then **announces itself as it crosses that spot**: a quick swell and snap
 back, with dust kicked off the ground or air flicked sideways for the ones that fly. It

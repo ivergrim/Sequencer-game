@@ -185,10 +185,50 @@ await solveCurrentStage(page);
   await page.click('.seq-row[data-instrument="shaker"] .seq-cell[data-step="3"]');
   await page.mouse.move(5, 5); // move off the cell so hover styling cannot confuse this
   await page.keyboard.press('Space');
-  await page.waitForFunction(() => window.__debug.state.phase === 'failed', null, {
-    timeout: 25_000,
+
+  // Trace the stage position across the hand-over to the death camera. The camera used
+  // to rewind to the collision, which showed up as a jump backwards on a single frame.
+  const trace = await page.evaluate(async () => {
+    const { state, transport, stage } = window.__debug;
+    const deadline = transport.now + 24;
+    while (state.phase !== 'failed' && transport.now < deadline) {
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    const rows = [];
+    const start = transport.now;
+    const handover = { shown: stage.lastStageStep, world: transport.stepFloat };
+    while (transport.now - start < 0.8) {
+      rows.push(stage.lastStageStep);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+
+    let worst = 0;
+    for (let i = 1; i < rows.length; i++) {
+      let delta = rows[i] - rows[i - 1];
+      if (delta < -8) delta += 16; // the bar line, not a jump
+      if (Math.abs(delta) > Math.abs(worst)) worst = delta;
+    }
+    return { handover, worst, frames: rows.length, stepDuration: transport.stepDuration };
   });
-  await page.waitForTimeout(500);
+
+  const frameSteps = 1 / 60 / trace.stepDuration;
+  check(
+    'the death camera takes over exactly where the world is',
+    Math.abs(trace.handover.shown - trace.handover.world) < 0.05,
+    `${trace.handover.shown.toFixed(4)} vs ${trace.handover.world.toFixed(4)}`,
+  );
+  check(
+    'the stage never jumps backwards into the camera',
+    trace.worst > -0.05,
+    `worst single-frame change ${trace.worst.toFixed(4)} steps`,
+  );
+  check(
+    'the approach decelerates rather than cutting',
+    Math.abs(trace.worst) < frameSteps * 2.5,
+    `worst ${Math.abs(trace.worst).toFixed(4)} steps, one frame is ${frameSteps.toFixed(3)}`,
+  );
+
+  await page.waitForTimeout(300);
 
   const during = await page.evaluate(() => {
     const cells = [...document.querySelectorAll('.seq-cell')];
