@@ -186,6 +186,8 @@ export interface StageFrame {
   countInBeat: number | null;
   /** The stage whose obstacles sit in the foreground, or null once the chapter is done. */
   currentStage: number | null;
+  /** After repeated failures, the death camera holds the beat ruler up out of the dim. */
+  hint: boolean;
 }
 
 interface Action {
@@ -317,6 +319,15 @@ export class StageRenderer {
       g.globalAlpha = 0.74;
       g.fillRect(0, 0, w, STAGE_HEIGHT);
       g.globalAlpha = 1;
+
+      // The hint, after enough consecutive failures: the quarter-note landmarks and
+      // the launch patch come back up out of the dim, so the frozen culprit can be
+      // read against the beat ruler. Nothing new is drawn and no step is named — the
+      // scenery that was always the ruler just stays legible while the camera holds.
+      if (frame.hint) {
+        this.drawScenery(frame, stepFloat, cell, dinoX, w);
+        this.drawImpactZone(dinoX);
+      }
 
       const failure = frame.failure;
       const culprit = frame.obstacles.find(

@@ -230,6 +230,7 @@ async function start(): Promise<void> {
       failure: state.failure,
       countInBeat: state.countInBeat,
       currentStage: state.complete ? null : state.stageIndex,
+      hint: state.hintActive,
     });
 
     requestAnimationFrame(frame);

@@ -53,6 +53,17 @@ export const DEATH_CAMERA = {
  */
 export const RUN_DECISION_LEAD = 0.3;
 
+/**
+ * Consecutive failures on one stage before the death camera starts helping.
+ *
+ * The sequencer never names the failed step — finding it is the skill the game
+ * teaches — but a player stuck this long gets a floor put under them: the camera also
+ * holds the quarter-note landmarks up out of the dim, so the culprit can be read
+ * against the beat ruler instead of against a uniformly dimmed stage. The search
+ * narrows; the answer is still theirs to find.
+ */
+export const HINT_AFTER_FAILURES = 3;
+
 /** Fraction of the count-in bar the character spends arriving out of the distance. */
 const ENTRY_FRACTION = 0.32;
 /** Fraction of the success flourish the character spends receding into the distance. */
@@ -109,6 +120,8 @@ export class GameState {
   complete = false;
   /** The most recent failure, kept so its marker stays on the ground. */
   failure: Failure | null = null;
+  /** Failures on this stage since it was last cleared. Drives the death camera hint. */
+  failStreak = 0;
   /**
    * Notes committed by clearing a stage. They keep playing but can no longer be changed.
    *
@@ -445,13 +458,20 @@ export class GameState {
     this.runResult = null;
     // The live pattern is audible again through the death camera and beyond.
     this.runPattern = null;
+    this.failStreak++;
     this.phase = 'failed';
     this.events.onFail?.(this.failure);
+  }
+
+  /** Whether the death camera should hold the beat ruler up out of the dim. */
+  get hintActive(): boolean {
+    return this.failStreak >= HINT_AFTER_FAILURES;
   }
 
   private advanceStage(): void {
     this.advanceAtBar = null;
     this.runResult = null;
+    this.failStreak = 0;
 
     if (this.stageIndex + 1 >= this.chapter.stages.length) {
       // The chapter is done and free play begins: the obstacles leave the world, so

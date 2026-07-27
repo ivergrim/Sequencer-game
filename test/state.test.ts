@@ -3,7 +3,12 @@ import type { Transport } from '../src/audio/transport';
 import { CHAPTER_1 } from '../src/game/chapter1';
 import { requiredNotes } from '../src/game/simulate';
 import type { StateEvents } from '../src/game/state';
-import { DEATH_CAMERA, GameState, RUN_DECISION_LEAD } from '../src/game/state';
+import {
+  DEATH_CAMERA,
+  GameState,
+  HINT_AFTER_FAILURES,
+  RUN_DECISION_LEAD,
+} from '../src/game/state';
 
 /**
  * A hand-cranked stand-in for the transport: the same derived-position arithmetic,
@@ -176,6 +181,39 @@ describe('the run pattern snapshot', () => {
 
     clock.now = clock.timeOfBar(runBar) + 0.05;
     expect(state.countInBeat).toBeNull();
+  });
+});
+
+describe('the failure hint', () => {
+  /** Run the empty pattern into stage 1's pillar and land in FAILED. */
+  function failOnce(clock: StubClock, state: GameState): void {
+    state.requestRun();
+    const runBar = clock.nextBarBoundary(clock.now + 0.15) + 1;
+    clock.now = clock.timeOfBar(runBar) - RUN_DECISION_LEAD + 0.001;
+    state.update();
+    clock.now = clock.timeOfBar(runBar) - DEATH_CAMERA.replay + 0.001;
+    state.update();
+    expect(state.phase).toBe('failed');
+  }
+
+  it('arms after enough consecutive failures on one stage', () => {
+    const { clock, state } = make();
+    for (let i = 1; i <= HINT_AFTER_FAILURES; i++) {
+      expect(state.hintActive).toBe(false);
+      failOnce(clock, state);
+      expect(state.failStreak).toBe(i);
+    }
+    expect(state.hintActive).toBe(true);
+  });
+
+  it('resets when the stage is finally cleared', () => {
+    const { clock, state } = make();
+    for (let i = 0; i < HINT_AFTER_FAILURES; i++) failOnce(clock, state);
+    expect(state.hintActive).toBe(true);
+
+    clearStage(clock, state);
+    expect(state.failStreak).toBe(0);
+    expect(state.hintActive).toBe(false);
   });
 });
 
