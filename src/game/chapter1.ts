@@ -13,7 +13,11 @@ export const CHAPTER_1: Chapter = {
   name: 'Deep house',
   bpm: 124,
   patternLength: 16,
-  rows: ['kick', 'clap', 'openhat', 'shaker', 'rim', 'crash'],
+  // Display order only, top to bottom. It mirrors the obstacles' vertical order on
+  // stage — pest highest, then bird, enemy, totem, pillar on the ground — so a row and
+  // the thing it clears sit at the same height. The wall spans the full height, and its
+  // crash takes the top slot, which is also where a drum kit puts it.
+  rows: ['crash', 'shaker', 'openhat', 'clap', 'rim', 'kick'],
   stages: [
     {
       id: 1,

@@ -30,8 +30,8 @@ describe('stepsToNextHit', () => {
 describe('actionTiming', () => {
   it('uses the base duration when there is room', () => {
     const timing = actionTiming('kick', lane([0, 4, 8, 12]), 0, STEP);
-    expect(timing.duration).toBeCloseTo(0.4, 6);
-    expect(timing.lead).toBeCloseTo(0.2, 6);
+    expect(timing.duration).toBeCloseTo(ACTIONS.kick.duration, 6);
+    expect(timing.lead).toBeCloseTo(ACTIONS.kick.duration * ACTIONS.kick.impact, 6);
   });
 
   it('caps the duration by the gap to the next hit on the same instrument', () => {
@@ -70,8 +70,23 @@ describe('actionTiming', () => {
   });
 
   it('leaves the four on the floor jump uncapped', () => {
+    // Four on the floor is four steps apart, comfortably longer than the base duration.
+    expect(4 * STEP).toBeGreaterThan(ACTIONS.kick.duration);
     const timing = actionTiming('kick', lane([0, 4, 8, 12]), 4, STEP);
     expect(timing.duration).toBeCloseTo(ACTIONS.kick.duration, 6);
+  });
+
+  it('gives every action room to complete between hits one step apart', () => {
+    // The tightest case in chapter 1. Each action must still finish before the next
+    // begins, whatever the instrument.
+    for (const instrument of Object.keys(ACTIONS) as Instrument[]) {
+      const dense = new Array<boolean>(LENGTH).fill(true);
+      const timing = actionTiming(instrument, dense, 4, STEP);
+      const start = 4 * STEP - timing.lead;
+      const end = start + timing.duration;
+      const nextStart = 5 * STEP - actionTiming(instrument, dense, 5, STEP).lead;
+      expect(end).toBeLessThanOrEqual(nextStart + 1e-9);
+    }
   });
 
   it('scales the lead with the capped duration', () => {

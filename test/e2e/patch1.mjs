@@ -67,7 +67,7 @@ const snap = () =>
   });
 
   check(
-    'the character enters from off screen left during the count-in',
+    'the character runs in out of the distance during the count-in',
     entry.modes.includes('entering'),
     entry.modes.join(','),
   );
@@ -182,8 +182,12 @@ await solveCurrentStage(page);
     };
   });
 
-  await page.click('.seq-row[data-instrument="shaker"] .seq-cell[data-step="3"]');
-  await page.mouse.move(5, 5); // move off the cell so hover styling cannot confuse this
+  // Committed notes are frozen now, so a small, old obstacle can no longer be orphaned
+  // through the UI. The renderer still has to identify one, so force it directly.
+  await page.evaluate(() => {
+    window.__debug.state.pattern.shaker[3] = false;
+  });
+  await page.mouse.move(5, 5); // keep hover styling out of the comparison
   await page.keyboard.press('Space');
 
   // Trace the stage position across the hand-over to the death camera. The camera used

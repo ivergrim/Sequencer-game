@@ -50,7 +50,16 @@ const GROUND_Y = 292;
 const DINO_FRACTION = 0.28;
 
 /** How far a receded obstacle drops in opacity. A hard floor, so small types survive it. */
-const RECEDED_ALPHA = 0.5;
+const RECEDED_ALPHA = 0.38;
+
+/**
+ * How long a newly added obstacle stays emphasised.
+ *
+ * By stage 10 there are twenty-one objects across one screen and a single new shaker is
+ * easy to miss entirely. For its first few bars it breathes, so the thing this stage is
+ * actually asking about announces itself.
+ */
+const ARRIVAL_SECONDS = 7;
 
 /**
  * The character reads as a runner among obstacles, not a giant stepping over pebbles, so
@@ -64,9 +73,25 @@ const JUMP_HEIGHT = 70;
  * dashing somewhere else rather than dashing through it.
  */
 const DASH_DISTANCE = 32;
-const SIDESTEP = 18;
+/** The hurdle clears the totem band without ever being mistaken for the kick's jump. */
+const HURDLE_HEIGHT = 30;
+/** The punch carries the body forward into the enemy rather than waving at it. */
+const PUNCH_LUNGE = 14;
 
 const RISE_SECONDS = 0.6;
+
+/**
+ * Where the character enters from and leaves to, as a fraction of the width, and how far
+ * away that reads.
+ *
+ * It runs in out of the distance and away into it rather than across the ground, so it
+ * never traverses the obstacle field and never appears to run through anything. Behind
+ * the obstacle layer, small, grey and lifted towards the ground line's vanishing point.
+ */
+const ENTRY_X = 0.05;
+const EXIT_X = 0.95;
+const HORIZON_SCALE = 0.2;
+const HORIZON_LIFT = 26;
 
 /**
  * How long an obstacle's reaction lasts once it crosses the launch position.
@@ -76,6 +101,9 @@ const RISE_SECONDS = 0.6;
  * bar for free, and cannot drift.
  */
 const REACTION_SECONDS = 0.22;
+
+/** How far an obstacle swells as it crosses the launch position. */
+const SWELL = 0.34;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
@@ -146,13 +174,26 @@ interface Action {
   duration: number;
 }
 
+/**
+ * One channel per action, so they layer instead of interrupting.
+ *
+ * Each obstacle type gets a move that answers its own band, and no two share an axis:
+ * a jump goes high, a hurdle goes low, a punch reaches forward, a duck goes down, a swat
+ * reaches up, a dash goes through.
+ */
 interface Pose {
+  /** kick, over the pillar on the ground. */
   jump: number;
-  dash: number;
+  /** rim, stepping over the totem at shin height. */
+  hurdle: number;
+  /** clap, through the enemy at chest height. */
   punch: number;
+  /** openhat, under the bird at head height. */
   duck: number;
-  sidestep: number;
-  leanBack: number;
+  /** shaker, up at the pest above head height. */
+  swat: number;
+  /** crash, straight through the wall. */
+  dash: number;
 }
 
 export class StageRenderer {
@@ -215,6 +256,11 @@ export class StageRenderer {
     this.drawScenery(frame, stepFloat, cell, dinoX, w);
     this.drawGround(frame, stepFloat, cell, dinoX, w);
 
+    // While it is out in the distance the character belongs behind the obstacle field,
+    // which is what stops it appearing to run through anything on the way in or out.
+    const distant = frame.character.mode === 'entering' || frame.character.mode === 'exiting';
+    if (distant) this.drawCharacter(frame, stepFloat, camera, dinoX, w);
+
     // Back layer first, foreground over it, so recency reads as depth. Walls span the
     // full height and are drawn before anything else in either layer.
     const receded = frame.obstacles.filter((o) => !isCurrent(o, frame.currentStage));
@@ -262,7 +308,7 @@ export class StageRenderer {
       this.lastCulprit = null;
     }
 
-    this.drawCharacter(frame, stepFloat, camera, dinoX, w);
+    if (!distant) this.drawCharacter(frame, stepFloat, camera, dinoX, w);
 
     if (frame.countInBeat !== null) this.drawCountIn(frame.countInBeat, w);
     if (frame.currentStage === null && !camera) this.drawBanner('chapter clear', w);
@@ -440,24 +486,32 @@ export class StageRenderer {
       }
     }
 
+    // A newly added obstacle breathes for its first few bars on top of everything else,
+    // so the one thing this stage introduced stands out from the twenty it did not.
+    const age = now - obstacle.addedAt;
+    const arrival = age < ARRIVAL_SECONDS ? 1 - age / ARRIVAL_SECONDS : 0;
+    const breath = arrival > 0 ? 1 + arrival * 0.09 * (0.5 + 0.5 * Math.sin(age * 4.2)) : 1;
+
     // The obstacle announces itself as it crosses the launch position: a quick swell and
     // snap back, pivoting on its base so a grounded shape never lifts off the ground.
-    if (reaction !== null) {
-      const swell = 1 + pop(reaction) * 0.13;
+    if (reaction !== null || breath !== 1) {
+      const swell = breath * (1 + (reaction === null ? 0 : pop(reaction)) * SWELL);
       const pivotY = grounded ? bottom : (bottom + top) / 2;
       g.save();
       g.translate(x, pivotY);
       g.scale(swell, swell);
       g.translate(-x, -pivotY);
-      drawShape(g, obstacle.type, x, bottom, top, WEIGHT[obstacle.type]);
+      drawShape(g, obstacle.type, x, bottom, top);
       g.restore();
 
       // Dust and ripples stay unscaled, so they read as thrown off the obstacle rather
       // than as part of it.
-      if (grounded) dustPuff(g, x, bottom, reaction, alpha);
-      else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
+      if (reaction !== null) {
+        if (grounded) dustPuff(g, x, bottom, reaction, alpha);
+        else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
+      }
     } else {
-      drawShape(g, obstacle.type, x, bottom, top, WEIGHT[obstacle.type]);
+      drawShape(g, obstacle.type, x, bottom, top);
     }
 
     g.restore();
@@ -491,7 +545,7 @@ export class StageRenderer {
     g.save();
     g.globalAlpha = 1;
     g.fillStyle = mixInk(INK, FAIL, 0.4 + breath * 0.45);
-    drawShape(g, obstacle.type, x, bottom, top, 'large');
+    drawShape(g, obstacle.type, x, bottom, top);
     g.restore();
   }
 
@@ -556,36 +610,62 @@ export class StageRenderer {
           pose.duck = Math.max(pose.duck, value);
           break;
         case 'shaker':
-          pose.sidestep = Math.max(pose.sidestep, value);
+          pose.swat = Math.max(pose.swat, value);
           break;
         case 'rim':
-          pose.leanBack = Math.max(pose.leanBack, value);
+          pose.hurdle = Math.max(pose.hurdle, value);
           break;
       }
     }
-    this.lastPose = pose;
-
-    let offsetX = 0;
     let tumble = 0;
+    // 1 at the launch position, 0 out at the horizon.
+    let depth = 1;
+    let x = dinoX;
 
     if (mode === 'entering') {
-      // Linear, so it arrives at running speed rather than easing to a halt.
-      offsetX = -(1 - frame.character.progress) * (dinoX + 140);
+      // Running in out of the distance rather than in from the wings. Nothing can be run
+      // through on the way, because there is no ground-level traversal to run through
+      // anything with — it arrives out of the depth of the scene instead.
+      depth = frame.character.progress;
+      x = ENTRY_X * w + (dinoX - ENTRY_X * w) * depth;
     } else if (mode === 'exiting') {
-      offsetX = ease(frame.character.progress) * (w - dinoX + 140);
+      depth = 1 - frame.character.progress;
+      x = dinoX + (EXIT_X * w - dinoX) * frame.character.progress;
     } else if (mode === 'down' && camera) {
       tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
     }
+
+    // Actions only take hold once it has arrived. A jump thrown while it is still out in
+    // the distance reads as floating rather than leaping, and the entry finishes well
+    // before step 0's own animation is due to start, so nothing is lost by damping them.
+    if (depth < 1) {
+      pose.jump *= depth;
+      pose.hurdle *= depth;
+      pose.punch *= depth;
+      pose.duck *= depth;
+      pose.swat *= depth;
+      pose.dash *= depth;
+    }
+    this.lastPose = pose;
+
+    // Distance reads as three things at once: smaller, greyer, and closer to the ground
+    // line's vanishing point.
+    const scale = CHAR_SCALE * (HORIZON_SCALE + (1 - HORIZON_SCALE) * depth);
+    const groundY = GROUND_Y - (1 - depth) * HORIZON_LIFT;
+    const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, depth);
+    // Fade the last stretch out entirely, so it does not pop at the screen edge.
+    const fade = clamp01(depth / 0.22);
 
     // Any action still in flight settles out over the tumble instead of being cut, so a
     // character caught mid-air comes down rather than snapping to the ground. It also
     // ends up back at the collision point, which is what the camera is there to show.
     const settle = 1 - tumble;
-    const lunge = (pose.dash * DASH_DISTANCE + pose.sidestep * SIDESTEP) * settle;
-    const x = dinoX + offsetX + lunge;
-    const y = GROUND_Y - pose.jump * JUMP_HEIGHT * settle;
+    const lunge = (pose.dash * DASH_DISTANCE + pose.punch * PUNCH_LUNGE) * settle;
+    const lift = (pose.jump * JUMP_HEIGHT + pose.hurdle * HURDLE_HEIGHT) * settle;
+    x += lunge;
+    const y = groundY - lift;
 
-    if (pose.dash > 0.15 && tumble === 0) {
+    if (pose.dash > 0.15 && tumble === 0 && depth >= 1) {
       g.strokeStyle = LIGHT;
       g.lineWidth = 2;
       for (let i = 0; i < 3; i++) {
@@ -598,21 +678,25 @@ export class StageRenderer {
     }
 
     g.save();
+    g.globalAlpha = fade;
     g.translate(x, y);
     if (tumble > 0) {
       g.rotate(tumble * 1.4);
       g.translate(0, Math.sin(Math.PI * Math.min(tumble * 1.6, 1)) * -16);
     } else {
-      g.rotate(-pose.leanBack * 0.2 + pose.dash * 0.1);
+      g.rotate(pose.dash * 0.12 - pose.swat * 0.1);
     }
-    g.scale(CHAR_SCALE, CHAR_SCALE);
+    g.scale(scale, scale);
 
     runner(g, {
       legPhase: stepFloat * Math.PI,
       airborne: pose.jump > 0.06,
+      hurdle: pose.hurdle,
       crouch: pose.duck,
       punch: pose.punch,
+      swat: pose.swat,
       tumbled: tumble > 0,
+      ink,
     });
     g.restore();
 
@@ -648,7 +732,7 @@ export class StageRenderer {
 // -------------------------------------------------------------------- helpers
 
 function emptyPose(): Pose {
-  return { jump: 0, dash: 0, punch: 0, duck: 0, sidestep: 0, leanBack: 0 };
+  return { jump: 0, hurdle: 0, punch: 0, duck: 0, swat: 0, dash: 0 };
 }
 
 function isCurrent(obstacle: RenderObstacle, currentStage: number | null): boolean {
@@ -714,7 +798,6 @@ function drawShape(
   x: number,
   bottom: number,
   top: number,
-  weight: Weight,
 ): void {
   switch (type) {
     case 'pillar':
@@ -730,12 +813,10 @@ function drawShape(
       blob(g, x, bottom, top);
       break;
     case 'bird':
-      if (weight === 'small') swarm(g, x, bottom, top, 5, 5);
-      else flyer(g, x, bottom, top);
+      birdGlyph(g, x, bottom, top);
       break;
     case 'pest':
-      if (weight === 'small') swarm(g, x, bottom, top, 4, 4);
-      else flyer(g, x, bottom, top);
+      pestGlyph(g, x, bottom, top);
       break;
   }
 }
@@ -762,14 +843,14 @@ function dustPuff(
   g.fillStyle = LIGHT;
 
   const out = ease(t);
-  for (let i = 0; i < 4; i++) {
-    // Two marks either side, thrown clear of the shape rather than piling up on it.
+  for (let i = 0; i < 6; i++) {
+    // Marks either side, thrown clear of the shape rather than piling up on it.
     const direction = i % 2 === 0 ? -1 : 1;
-    const rank = i < 2 ? 0 : 1;
-    const spread = 10 + out * (18 + rank * 12);
+    const rank = i >> 1;
+    const spread = 11 + out * (22 + rank * 13);
     // A shallow arc: out and up, then settling back towards the ground.
-    const lift = Math.sin(Math.PI * t) * (6 + rank * 5);
-    g.fillRect(Math.round(x + direction * spread - 2), Math.round(bottom - lift - 1), 4, 2);
+    const lift = Math.sin(Math.PI * t) * (7 + rank * 6);
+    g.fillRect(Math.round(x + direction * spread - 2), Math.round(bottom - lift - 1), 5, 3);
   }
 
   g.globalAlpha = previousAlpha;
@@ -878,61 +959,75 @@ function blob(g: CanvasRenderingContext2D, x: number, bottom: number, top: numbe
 }
 
 /**
- * bird and pest at small weight: a clustered texture band rather than discrete objects.
+ * bird (openhat): one coherent gull silhouette.
  *
- * Simplified on purpose. Sixteen of these across a bar have to read as texture, not as
- * sixteen things competing with the kicks and claps for attention.
+ * Both small types used to be the same scatter of marks with a different count, which is
+ * why they were impossible to tell apart. They now differ in kind, not degree: the bird
+ * is a single connected wide shape, the pest is a scatter of separate specks.
  */
-function swarm(
-  g: CanvasRenderingContext2D,
-  x: number,
-  bottom: number,
-  top: number,
-  count: number,
-  size: number,
-): void {
+function birdGlyph(g: CanvasRenderingContext2D, x: number, bottom: number, top: number): void {
   const h = bottom - top;
-  const spread = 13;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2;
-    const px = x + Math.cos(angle * 1.7 + i) * spread;
-    const py = top + h * 0.5 + Math.sin(angle * 2.3 + i) * (h * 0.32);
-    g.fillRect(Math.round(px), Math.round(py), size, size - 1);
-  }
+  const s = h / 28;
+  const midY = top + h * 0.5;
+  const u = (n: number) => Math.round(n * s);
+
+  g.fillRect(x - u(4), midY - u(2), u(8), u(5)); // body
+  g.fillRect(x - u(12), midY - u(6), u(8), u(4)); // left wing, outer
+  g.fillRect(x - u(16), midY - u(10), u(6), u(4)); // left wing tip
+  g.fillRect(x + u(4), midY - u(6), u(8), u(4)); // right wing, outer
+  g.fillRect(x + u(10), midY - u(10), u(6), u(4)); // right wing tip
 }
 
-/** bird and pest promoted to large weight, for the death camera. */
-function flyer(g: CanvasRenderingContext2D, x: number, bottom: number, top: number): void {
+/** pest (shaker): a scatter of separate specks, never a single body. */
+function pestGlyph(g: CanvasRenderingContext2D, x: number, bottom: number, top: number): void {
   const h = bottom - top;
-  const w = 34;
-  const midY = top + h * 0.58;
-  g.fillRect(x - w / 2, midY - h * 0.12, w, h * 0.24);
-  g.fillRect(x + w / 2, midY - h * 0.16, 10, h * 0.12);
-  g.fillRect(x - w / 2 + 5, top, w * 0.6, h * 0.5);
+  const s = h / 26;
+  const midY = top + h * 0.5;
+  const marks: Array<[number, number]> = [
+    [-12, -5],
+    [-5, 3],
+    [2, -7],
+    [9, 1],
+    [-1, -1],
+    [13, -6],
+  ];
+  for (const [dx, dy] of marks) {
+    g.fillRect(Math.round(x + dx * s), Math.round(midY + dy * s), Math.round(4 * s), Math.round(4 * s));
+  }
 }
 
 interface RunnerPose {
   legPhase: number;
   airborne: boolean;
+  hurdle: number;
   crouch: number;
   punch: number;
+  swat: number;
   tumbled: boolean;
+  ink: string;
 }
 
 /**
  * The character, drawn at the origin with its feet on y = 0, in unscaled units.
  *
- * Small actions read as changes to this pose rather than as separate animations, which
- * is what keeps a bar of sixteenth dodges legible instead of sixteen interruptions.
+ * Every action deforms this one pose rather than playing a separate animation, which is
+ * what lets them layer — a crash and a kick on the same step give a dash and a leap at
+ * once. Each deformation is exaggerated well past realism, because at 124 BPM a sixteenth
+ * lasts 121ms and a subtle move simply is not seen.
  */
 function runner(g: CanvasRenderingContext2D, pose: RunnerPose): void {
-  const squash = 1 - pose.crouch * 0.28;
+  // Ducking is a deep crouch, not a nod: the bird sits at head height and the character
+  // has to visibly go under it. The head also pushes forward as it drops, which is what
+  // separates a duck from simply being short.
+  const squash = 1 - pose.crouch * 0.52;
   const bodyH = 20 * squash;
   const bodyY = -30 * squash - 6;
   const headY = bodyY - 16 * squash;
+  const headX = pose.crouch * 7;
 
-  g.fillStyle = INK;
+  g.fillStyle = pose.ink;
 
+  // tail
   g.beginPath();
   g.moveTo(-13, bodyY + 4);
   g.lineTo(-26, bodyY - 2);
@@ -940,12 +1035,22 @@ function runner(g: CanvasRenderingContext2D, pose: RunnerPose): void {
   g.closePath();
   g.fill();
 
+  // body
   g.fillRect(-13, bodyY, 26, bodyH);
 
+  // legs
   if (pose.tumbled) {
     g.fillRect(-6, bodyY + bodyH, 6, 8);
     g.fillRect(6, bodyY + bodyH - 2, 6, 8);
+  } else if (pose.hurdle > 0.08) {
+    // A hurdle is a low step-over: lead leg thrown forward and straight, trailing leg
+    // folded up behind. Unmistakable against the jump's tucked-in symmetry.
+    const reach = pose.hurdle;
+    g.fillRect(2, bodyY + bodyH - 1, 8 + reach * 16, 5);
+    g.fillRect(2 + reach * 16, bodyY + bodyH - 3 - reach * 6, 5, 6);
+    g.fillRect(-10, bodyY + bodyH - reach * 5, 6, 10 - reach * 4);
   } else if (pose.airborne) {
+    // Both legs tucked, which is what makes a jump read as a jump.
     g.fillRect(-6, bodyY + bodyH, 6, 8);
     g.fillRect(4, bodyY + bodyH - 2, 6, 7);
   } else {
@@ -956,18 +1061,33 @@ function runner(g: CanvasRenderingContext2D, pose: RunnerPose): void {
     g.fillRect(3 - swing * 3, bodyY + bodyH, 6, 12 - lift2);
   }
 
+  // neck and head
   g.fillRect(6, headY, 10, 18 * squash);
-  g.fillRect(6, headY - 12, 20, 14);
-  g.fillRect(26, headY - 6, 6, 5);
+  g.fillRect(6 + headX, headY - 12, 20, 14);
+  g.fillRect(26 + headX, headY - 6, 6, 5);
 
+  // eye
   g.fillStyle = PAPER;
   if (pose.tumbled) {
-    g.fillRect(15, headY - 9, 6, 2);
-    g.fillRect(17, headY - 11, 2, 6);
+    g.fillRect(15 + headX, headY - 9, 6, 2);
+    g.fillRect(17 + headX, headY - 11, 2, 6);
   } else {
-    g.fillRect(16, headY - 9, 4, 4);
+    g.fillRect(16 + headX, headY - 9, 4, 4);
   }
-  g.fillStyle = INK;
+  g.fillStyle = pose.ink;
 
-  g.fillRect(6, bodyY + 4, 8 + pose.punch * 14, 5);
+  // The punch drives an arm the length of the body forward, at chest height.
+  if (pose.punch > 0.02) {
+    g.fillRect(6, bodyY + 3, 10 + pose.punch * 30, 6);
+    g.fillRect(14 + pose.punch * 30, bodyY, 8, 11); // fist
+  } else if (pose.swat > 0.02) {
+    // The swat throws an arm straight up at the pest overhead. It rises on the near side
+    // of the neck rather than in front of it: drawn over the head in the same ink it
+    // simply disappears into the silhouette.
+    const reach = pose.swat;
+    g.fillRect(-3, bodyY + 4 - reach * 30, 7, 10 + reach * 30);
+    g.fillRect(-7, bodyY - 2 - reach * 38, 14, 9); // open hand, clear above the head
+  } else {
+    g.fillRect(6, bodyY + 4, 8, 5);
+  }
 }

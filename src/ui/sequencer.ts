@@ -34,6 +34,7 @@ export class SequencerUI {
   private readonly unlocked = new Set<Instrument>();
   /** What the DOM currently shows, so the frame loop never reads back from it. */
   private readonly shown = new Map<Instrument, boolean[]>();
+  private readonly shownLocked = new Map<Instrument, boolean[]>();
   private lastBudget = '';
   private lastStatus = '';
   private lastStageLabel = '';
@@ -102,6 +103,7 @@ export class SequencerUI {
       this.rows.set(instrument, row);
       this.cells.set(instrument, rowCells);
       this.shown.set(instrument, new Array<boolean>(patternLength).fill(false));
+      this.shownLocked.set(instrument, new Array<boolean>(patternLength).fill(false));
     }
 
     this.playhead = document.createElement('div');
@@ -162,11 +164,25 @@ export class SequencerUI {
     for (const [instrument, rowCells] of this.cells) {
       const lane = state.pattern[instrument];
       const shown = this.shown.get(instrument)!;
+      const shownLocked = this.shownLocked.get(instrument)!;
+
       for (let step = 0; step < rowCells.length; step++) {
+        const cell = rowCells[step]!;
+
         const on = lane[step] === true;
-        if (shown[step] === on) continue;
-        shown[step] = on;
-        rowCells[step]!.setAttribute('aria-pressed', String(on));
+        if (shown[step] !== on) {
+          shown[step] = on;
+          cell.setAttribute('aria-pressed', String(on));
+        }
+
+        // A note committed by an earlier stage greys out and stops responding, the same
+        // way its obstacle recedes on stage. It keeps playing.
+        const committed = state.isLocked(instrument, step);
+        if (shownLocked[step] !== committed) {
+          shownLocked[step] = committed;
+          cell.classList.toggle('committed', committed);
+          cell.setAttribute('aria-disabled', String(committed));
+        }
       }
     }
   }

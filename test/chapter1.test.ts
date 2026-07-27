@@ -19,7 +19,8 @@ describe('chapter 1 data', () => {
   it('is 124 BPM, 16 steps, six rows in the declared order', () => {
     expect(CHAPTER_1.bpm).toBe(124);
     expect(patternLength).toBe(16);
-    expect(rows).toEqual(['kick', 'clap', 'openhat', 'shaker', 'rim', 'crash']);
+    // Top to bottom, mirroring the obstacles' vertical order on stage.
+    expect(rows).toEqual(['crash', 'shaker', 'openhat', 'clap', 'rim', 'kick']);
   });
 
   it('has ten stages, each adding a stem', () => {

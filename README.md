@@ -53,8 +53,8 @@ npm run test:e2e:patch1    # the patch 1 acceptance criteria
 ```
 
 `test:e2e` plays the whole chapter by clicking real cells, and checks the budget
-rejection, row locking, the carried-over-note failure, and that the transport is never
-restarted and never stalls.
+rejection, row locking, that a committed note cannot be removed, and that the transport is
+never restarted and never stalls.
 
 `test:e2e:drift` fills the pattern so a hit lands on every step, then records how far the
 derived `stepFloat` sits from the step each hit was scheduled to sound on. That one number
@@ -152,7 +152,7 @@ On Looperman, filter by a single BPM and key so the layers stack.
 | Click a cell | Toggle a note |
 | Space | Run |
 | R | Retry |
-| Escape | Clear all editable notes |
+| Escape | Clear this stage's notes (committed ones stay) |
 
 ## Architecture
 
@@ -209,8 +209,30 @@ before the animation starts; the animation presents an already-decided result.
 
 ### Reading the stage
 
-Two systems keep the stage legible as obstacles accumulate, and they are deliberately
-independent so they can never multiply and bury the oldest small obstacles:
+By stage 10 there are twenty-one obstacles across one screen. Four systems keep that
+readable rather than merely dense.
+
+**Committed notes freeze.** A stage only clears when the placed notes are exactly the
+derived solution, so everything on the grid at that moment is known-correct. It greys out
+and stops taking input, mirroring the way its obstacle recedes on stage. Each stage then
+asks about its own new obstacles and nothing else, instead of re-presenting the whole
+pattern. It also means a solved stage can never be broken.
+
+**Rows mirror the stage.** The sequencer's row order is the obstacles' vertical order:
+shaker highest, then openhat, clap, rim, and kick on the ground, with crash at the top
+where the wall's full-height silhouette and a drum kit both put it. A row and the thing it
+clears sit at the same height.
+
+**Silhouettes differ in kind, not degree.** The bird is one connected gull shape; the pest
+is a scatter of separate specks. Drawing both as the same texture with a different mark
+count made them impossible to tell apart, which is what made the late stages feel
+arbitrary rather than hard.
+
+**New arrivals breathe.** A freshly added obstacle pulses for its first few bars, so the
+one thing a stage introduced stands out from the twenty it did not.
+
+The two depth systems below stay deliberately independent, so they can never multiply and
+bury the oldest small obstacles:
 
 | | Set by | Controls | Changes with |
 |---|---|---|---|
@@ -243,6 +265,29 @@ step S is at the launch position exactly when `stepFloat` is S, so how far it is
 reaction is just the wrapped difference. Nothing is scheduled, it repeats every bar for
 free, and it inherits the transport's immunity to drift. `test/reaction.test.ts` pins the
 onset to the crossing.
+
+### Actions
+
+Each obstacle band gets a move that answers it, and no two share an axis, so they stay
+distinguishable at a glance even at 121ms apart:
+
+| Instrument | Obstacle | Band | Action |
+|---|---|---|---|
+| kick | pillar | ground | jump, legs tucked |
+| rim | totem | shin | hurdle, lead leg thrown forward |
+| clap | enemy | chest | punch, arm and fist driven forward |
+| openhat | bird | head | duck, deep crouch with the head pushed down and forward |
+| shaker | pest | overhead | swat, arm thrown straight up |
+| crash | wall | full height | dash, forward lunge with speed lines |
+
+They layer by taking the max of each channel, so a crash and a kick on one step give a
+dash-leap. Every deformation is exaggerated well past realism, because a sixteenth at 124
+BPM lasts 121ms and a subtle move simply is not seen.
+
+The character exists only for the run, and enters and leaves along the depth axis rather
+than across the ground — small, grey and lifted towards the vanishing point, behind the
+obstacle layer, resolving to full size and full ink as it reaches the launch position. It
+therefore never traverses the obstacle field and never appears to run through anything.
 
 ### Action timing
 

@@ -177,12 +177,35 @@ check(
   (await snapshot()).unlocked.join(','),
 );
 
-// ------------------------------ removing a carried-over note fails at that step
+// ------------------------------ committed notes are frozen, and an unsolved run fails
 {
-  // Take out the kick on step 8, first placed back in stage 2.
-  await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]');
+  // Every note is committed by now, so clicking one does nothing. This is what replaces
+  // the old "remove a carried-over note" failure: solved stages cannot be broken.
+  const before = await snapshot();
+  const inert = await page.evaluate(() => {
+    const cell = document.querySelector(
+      '.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]',
+    );
+    return {
+      committed: cell.classList.contains('committed'),
+      disabled: cell.getAttribute('aria-disabled') === 'true',
+      pointerEvents: getComputedStyle(cell).pointerEvents,
+    };
+  });
+  // force, because the cell deliberately takes no pointer events at all.
+  await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]', { force: true });
+  const after = await snapshot();
+
+  check('a committed note is marked committed and inert', inert.committed && inert.disabled, JSON.stringify(inert));
+  check('it does not take pointer events', inert.pointerEvents === 'none', inert.pointerEvents);
+  check('a committed note cannot be removed', after.used === before.used, `${before.used} -> ${after.used}`);
+
+  // Reach past the UI to force the failure the renderer still has to handle.
+  await page.evaluate(() => {
+    window.__debug.state.pattern.kick[8] = false;
+  });
   const removed = await snapshot();
-  check('the carried-over note is removed', removed.used === 20);
+  check('the pattern can still be broken from outside the UI', removed.used === 20);
 
   await runAndSettle(page);
   const failed = await snapshot();

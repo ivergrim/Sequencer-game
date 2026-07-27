@@ -82,6 +82,15 @@ export class GameState {
   complete = false;
   /** The most recent failure, kept so its marker stays on the ground. */
   failure: Failure | null = null;
+  /**
+   * Notes committed by clearing a stage. They keep playing but can no longer be changed.
+   *
+   * The budget is exact and a stage only clears when the placed notes are precisely the
+   * derived solution, so everything on the grid at that moment is known-correct. Freezing
+   * it means each stage asks the player about its own new obstacles and nothing else,
+   * which is what keeps stage 10 tractable rather than a twenty-one note re-audit.
+   */
+  private readonly locked: Pattern;
 
   /** Absolute bar indices, set when a run is armed. */
   private countInBar = 0;
@@ -95,6 +104,12 @@ export class GameState {
     this.transport = transport;
     this.events = events;
     this.pattern = emptyPattern(chapter.rows, chapter.patternLength);
+    this.locked = emptyPattern(chapter.rows, chapter.patternLength);
+  }
+
+  /** Whether this note was committed by an earlier stage and is now fixed. */
+  isLocked(instrument: Instrument, step: number): boolean {
+    return this.locked[instrument][step] === true;
   }
 
   // ---------------------------------------------------------------- stage data
@@ -153,6 +168,7 @@ export class GameState {
    */
   toggle(instrument: Instrument, step: number): void {
     if (!this.isUnlocked(instrument)) return;
+    if (this.isLocked(instrument, step)) return;
 
     const lane = this.pattern[instrument];
     if (step < 0 || step >= lane.length) return;
@@ -167,12 +183,16 @@ export class GameState {
     lane[step] = !lane[step];
   }
 
-  /** Escape: clear every note in the unlocked rows. */
+  /** Escape: clear this stage's own notes, leaving committed ones alone. */
   clearEditable(): void {
     const unlocked = this.unlockedRows;
     for (const instrument of this.chapter.rows) {
       if (!unlocked.has(instrument)) continue;
-      this.pattern[instrument].fill(false);
+      const lane = this.pattern[instrument];
+      const committed = this.locked[instrument];
+      for (let step = 0; step < lane.length; step++) {
+        if (!committed[step]) lane[step] = false;
+      }
     }
   }
 
@@ -354,6 +374,16 @@ export class GameState {
   private advanceStage(): void {
     this.advanceAtBar = null;
     this.runResult = null;
+
+    // Everything on the grid cleared this stage, so it is all correct. Commit it.
+    for (const instrument of this.chapter.rows) {
+      const lane = this.pattern[instrument];
+      const committed = this.locked[instrument];
+      for (let step = 0; step < lane.length; step++) {
+        if (lane[step]) committed[step] = true;
+      }
+    }
+
     if (this.stageIndex + 1 >= this.chapter.stages.length) {
       this.complete = true;
     } else {

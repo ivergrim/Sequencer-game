@@ -23,13 +23,17 @@ export interface ActionSpec {
   impact: number;
 }
 
+/**
+ * Durations are deliberately tight. A loose, floaty action blurs into the next one when
+ * hits are close together, and chapter 1 puts kicks one step apart at 121ms.
+ */
 export const ACTIONS: Record<Instrument, ActionSpec> = {
-  kick: { duration: 0.4, impact: 0.5 }, // jump, apex of the arc
-  crash: { duration: 0.3, impact: 0.6 }, // dash, mid-dash at full speed
-  clap: { duration: 0.24, impact: 0.55 }, // punch, full extension
-  openhat: { duration: 0.16, impact: 0.5 }, // dodge, apex
-  shaker: { duration: 0.16, impact: 0.5 },
-  rim: { duration: 0.16, impact: 0.5 },
+  kick: { duration: 0.28, impact: 0.5 }, // jump, apex of the arc
+  crash: { duration: 0.24, impact: 0.6 }, // dash, mid-dash at full speed
+  clap: { duration: 0.2, impact: 0.55 }, // punch, full extension
+  openhat: { duration: 0.18, impact: 0.5 }, // duck, lowest point
+  shaker: { duration: 0.18, impact: 0.5 }, // swat, top of the reach
+  rim: { duration: 0.2, impact: 0.5 }, // hurdle, top of the step-over
 };
 
 /** The longest lead any action can need, for the frame loop's scheduling horizon. */
@@ -104,9 +108,13 @@ export function actionTiming(
  * `impulse(impact, impact) === 1` is what makes the impact frame land on the step: at
  * `stepTime(S)` the elapsed fraction is exactly the impact ratio, so the channel is at
  * its maximum. Apex of the jump, full extension of the punch, full speed of the dash.
+ *
+ * Ballistic rather than sinusoidal. A sine leaves and arrives at zero velocity, which
+ * reads as floating; this leaves the ground at speed and comes back down at speed, so
+ * two jumps one step apart read as two jumps rather than one long hover.
  */
 export function impulse(t: number, impact: number): number {
   if (t <= 0 || t >= 1) return 0;
-  if (t <= impact) return Math.sin((t / impact) * (Math.PI / 2));
-  return Math.cos(((t - impact) / (1 - impact)) * (Math.PI / 2));
+  const phase = t <= impact ? (impact - t) / impact : (t - impact) / (1 - impact);
+  return 1 - phase * phase;
 }
