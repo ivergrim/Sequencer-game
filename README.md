@@ -174,6 +174,9 @@ src/
     stage.ts         canvas renderer
 ```
 
+Add `test/reaction.test.ts` to the unit suite: it pins the obstacle reaction's onset to
+the moment an obstacle reaches the launch position.
+
 Four commitments hold the whole thing up:
 
 **One clock.** `AudioContext.currentTime` is the only source of truth. Nothing
@@ -211,6 +214,25 @@ Each obstacle type also occupies a fixed, non-overlapping vertical band. This is
 bearing rather than decorative: chapter 1 stacks three obstacles on step 12 and two each
 on steps 0, 4 and 15, which would occlude each other at the same x without it. No lane
 guides are ever drawn — it reads only as characteristic height per type.
+
+### Where the beat falls
+
+There is no hit line, and no step grid. Two things carry it instead.
+
+The **launch position is worn into the terrain** — a patch of bare ground with a few
+scuff marks, in the same idiom as the ground litter. It is the one thing on the ground
+that does not scroll, which is what makes it read as a place rather than as scenery.
+
+Every obstacle then **announces itself as it crosses that spot**: a quick swell and snap
+back, with dust kicked off the ground or air flicked sideways for the ones that fly. It
+fires in every phase, including EDITING, so the player watches each obstacle land on its
+beat before committing to a run.
+
+The reaction is derived from `stepFloat` rather than fired as an event. An obstacle on
+step S is at the launch position exactly when `stepFloat` is S, so how far it is into its
+reaction is just the wrapped difference. Nothing is scheduled, it repeats every bar for
+free, and it inherits the transport's immunity to drift. `test/reaction.test.ts` pins the
+onset to the crossing.
 
 ### Action timing
 

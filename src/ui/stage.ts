@@ -11,9 +11,12 @@ import { OBSTACLE_INSTRUMENT } from '../game/types';
  * bar line. Every position derives from `stepFloat`, which derives from the audio clock;
  * nothing here advances by a per-frame delta.
  *
- * The stage never draws the step grid. No tick marks, no lanes, no step numbers. The
- * only positional aid is scenery on the quarter notes, which reads as parallax and
- * functions as a coarse ruler.
+ * The stage never draws the step grid. No tick marks, no lanes, no step numbers. Where
+ * the beat falls is expressed two ways instead, neither of them a hit line: the launch
+ * position is worn into the terrain, and every obstacle reacts as it crosses that spot,
+ * whether or not a run is under way.
+ *
+ * Scenery on the quarter notes reads as parallax and functions as a coarse ruler.
  *
  * Legibility rests on two systems that are deliberately independent, so they can never
  * multiply and hide the oldest small obstacles:
@@ -40,17 +43,30 @@ const DINO_FRACTION = 0.15;
 /** How far a receded obstacle drops in opacity. A hard floor, so small types survive it. */
 const RECEDED_ALPHA = 0.5;
 
-const CHAR_SCALE = 2.2;
-const JUMP_HEIGHT = 85;
+/**
+ * The character reads as a runner among obstacles, not a giant stepping over pebbles, so
+ * its size is set against the pillar band rather than against the canvas.
+ */
+const CHAR_SCALE = 1.45;
+const JUMP_HEIGHT = 70;
 /**
  * A dash is a short forward lunge plus speed lines, not a long translation. The obstacle
  * is at DINO_X on the impact frame, so carrying the character far past it would read as
  * dashing somewhere else rather than dashing through it.
  */
-const DASH_DISTANCE = 45;
-const SIDESTEP = 26;
+const DASH_DISTANCE = 32;
+const SIDESTEP = 18;
 
 const RISE_SECONDS = 0.6;
+
+/**
+ * How long an obstacle's reaction lasts once it crosses the launch position.
+ *
+ * Short enough to read as an impact rather than an animation. It is derived from
+ * `stepFloat` rather than fired as an event, so it needs no scheduling, repeats every
+ * bar for free, and cannot drift.
+ */
+const REACTION_SECONDS = 0.22;
 
 /** Ground litter, deliberately off the sixteenth grid so it can never read as one. */
 const PEBBLES = [0.031, 0.107, 0.183, 0.271, 0.339, 0.427, 0.518, 0.603, 0.689, 0.771, 0.858, 0.941];
@@ -68,12 +84,12 @@ interface Band {
 }
 
 export const BANDS: Record<ObstacleType, Band> = {
-  pillar: { bottom: 0, top: 38 }, // on the ground
-  totem: { bottom: 44, top: 78 }, // just above
-  enemy: { bottom: 84, top: 116 }, // chest
-  bird: { bottom: 122, top: 154 }, // head
-  pest: { bottom: 162, top: 196 }, // above head
-  wall: { bottom: 0, top: 204 }, // spans full height, drawn behind the others
+  pillar: { bottom: 0, top: 50 }, // on the ground
+  totem: { bottom: 56, top: 80 }, // just above
+  enemy: { bottom: 86, top: 116 }, // chest
+  bird: { bottom: 122, top: 150 }, // head
+  pest: { bottom: 156, top: 182 }, // above head
+  wall: { bottom: 0, top: 192 }, // spans full height, drawn behind the others
 };
 
 /** Weight is set by instrument. Size and detail only, never opacity. */
@@ -190,8 +206,16 @@ export class StageRenderer {
     const current = frame.obstacles.filter((o) => isCurrent(o, frame.currentStage));
     for (const obstacle of [...byDepth(receded), ...byDepth(current)]) {
       const foreground = isCurrent(obstacle, frame.currentStage);
+      const reaction = reactionAt(obstacle.step, stepFloat, frame.patternLength, frame.stepDuration);
       this.eachWrap(obstacle.step, stepFloat, frame.patternLength, cell, dinoX, w, (x) => {
-        this.drawObstacle(obstacle, x, frame.now, foreground ? 1 : RECEDED_ALPHA, foreground);
+        this.drawObstacle(
+          obstacle,
+          x,
+          frame.now,
+          foreground ? 1 : RECEDED_ALPHA,
+          foreground,
+          reaction,
+        );
       });
     }
 
@@ -296,6 +320,9 @@ export class StageRenderer {
     w: number,
   ): void {
     const { g } = this;
+
+    this.drawImpactZone(dinoX);
+
     g.strokeStyle = INK;
     g.lineWidth = 2;
     g.beginPath();
@@ -313,6 +340,46 @@ export class StageRenderer {
     }
   }
 
+  /**
+   * The launch position, as terrain rather than as a marker.
+   *
+   * A patch of ground worn bare by everything that has taken off from it. Drawn in the
+   * same idiom as the ground litter — a soft shading and a few scuff marks — so it reads
+   * as part of the scenery rather than as an overlay.
+   *
+   * Deliberately *not* a vertical line, and deliberately the one thing on the ground that
+   * does not scroll. Everything else slides past it, which is what makes it legible as a
+   * place: obstacles arrive here, and the character takes off from here.
+   */
+  private drawImpactZone(dinoX: number): void {
+    const { g } = this;
+    g.save();
+
+    // Packed earth, a shade off the paper.
+    g.fillStyle = SOFT;
+    g.globalAlpha = 0.55;
+    g.beginPath();
+    g.ellipse(dinoX, GROUND_Y + 4, 46, 5, 0, 0, Math.PI * 2);
+    g.fill();
+
+    // A few scuffs, in the same 5x2 idiom as the litter, so the patch reads as worn
+    // rather than as a shape someone drew.
+    g.globalAlpha = 0.8;
+    g.fillStyle = LIGHT;
+    const scuffs: Array<[number, number, number]> = [
+      [-30, 5, 6],
+      [-12, 9, 5],
+      [8, 5, 7],
+      [26, 10, 5],
+      [-2, 13, 4],
+    ];
+    for (const [dx, dy, len] of scuffs) {
+      g.fillRect(Math.round(dinoX + dx), GROUND_Y + dy, len, 2);
+    }
+
+    g.restore();
+  }
+
   // --------------------------------------------------------------- obstacles
 
   private drawObstacle(
@@ -321,6 +388,7 @@ export class StageRenderer {
     now: number,
     alpha: number,
     foreground: boolean,
+    reaction: number | null,
   ): void {
     const { g } = this;
     const rise = clamp01((now - obstacle.addedAt) / RISE_SECONDS);
@@ -332,11 +400,12 @@ export class StageRenderer {
     const band = BANDS[obstacle.type];
     const bottom = GROUND_Y - band.bottom;
     const top = GROUND_Y - band.top;
+    const grounded = band.bottom === 0;
 
     // Rising is a vertical entrance: clipped at the ground for the types that stand on
     // it, faded in for the ones that do not.
     if (rise < 1) {
-      if (band.bottom === 0) {
+      if (grounded) {
         g.beginPath();
         g.rect(0, 0, this.width, GROUND_Y + 1);
         g.clip();
@@ -346,7 +415,26 @@ export class StageRenderer {
       }
     }
 
-    drawShape(g, obstacle.type, x, bottom, top, WEIGHT[obstacle.type]);
+    // The obstacle announces itself as it crosses the launch position: a quick swell and
+    // snap back, pivoting on its base so a grounded shape never lifts off the ground.
+    if (reaction !== null) {
+      const swell = 1 + pop(reaction) * 0.13;
+      const pivotY = grounded ? bottom : (bottom + top) / 2;
+      g.save();
+      g.translate(x, pivotY);
+      g.scale(swell, swell);
+      g.translate(-x, -pivotY);
+      drawShape(g, obstacle.type, x, bottom, top, WEIGHT[obstacle.type]);
+      g.restore();
+
+      // Dust and ripples stay unscaled, so they read as thrown off the obstacle rather
+      // than as part of it.
+      if (grounded) dustPuff(g, x, bottom, reaction, alpha);
+      else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
+    } else {
+      drawShape(g, obstacle.type, x, bottom, top, WEIGHT[obstacle.type]);
+    }
+
     g.restore();
   }
 
@@ -474,10 +562,10 @@ export class StageRenderer {
       g.strokeStyle = LIGHT;
       g.lineWidth = 2;
       for (let i = 0; i < 3; i++) {
-        const lineY = y - 30 - i * 22;
+        const lineY = y - (20 + i * 15) * CHAR_SCALE;
         g.beginPath();
-        g.moveTo(x - 46 - i * 18, lineY);
-        g.lineTo(x - 92 - i * 26, lineY);
+        g.moveTo(x - (30 + i * 12) * CHAR_SCALE, lineY);
+        g.lineTo(x - (60 + i * 17) * CHAR_SCALE, lineY);
         g.stroke();
       }
     }
@@ -551,6 +639,30 @@ function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
+/**
+ * How far an obstacle is into its reaction, 0..1, or null if it is not reacting.
+ *
+ * Derived rather than scheduled. An obstacle on step S is at the launch position exactly
+ * when `stepFloat` is S, so the steps elapsed since it last passed there is simply the
+ * wrapped difference. It repeats every bar with no bookkeeping, fires in every phase
+ * including EDITING, and inherits the transport's immunity to drift.
+ */
+export function reactionAt(
+  step: number,
+  stepFloat: number,
+  patternLength: number,
+  stepDuration: number,
+): number | null {
+  const sinceSteps = (((stepFloat - step) % patternLength) + patternLength) % patternLength;
+  const t = (sinceSteps * stepDuration) / REACTION_SECONDS;
+  return t < 1 ? t : null;
+}
+
+/** Fast attack, slower release. Peaks around a quarter of the way in. */
+function pop(t: number): number {
+  return Math.sin(Math.PI * Math.pow(clamp01(t), 0.55));
+}
+
 function ease(t: number): number {
   const x = clamp01(t);
   return 1 - Math.pow(1 - x, 3);
@@ -588,6 +700,76 @@ function drawShape(
       else flyer(g, x, bottom, top);
       break;
   }
+}
+
+/**
+ * Dust kicked off the ground as a grounded obstacle passes the launch position.
+ *
+ * Drawn in the ground litter's own idiom — small light marks — so it reads as the world
+ * reacting rather than as an effect layer.
+ */
+function dustPuff(
+  g: CanvasRenderingContext2D,
+  x: number,
+  bottom: number,
+  t: number,
+  alpha: number,
+): void {
+  const fade = (1 - t) * 0.7;
+  if (fade <= 0) return;
+
+  const previousAlpha = g.globalAlpha;
+  const previousFill = g.fillStyle;
+  g.globalAlpha = alpha * fade;
+  g.fillStyle = LIGHT;
+
+  const out = ease(t);
+  for (let i = 0; i < 4; i++) {
+    // Two marks either side, thrown clear of the shape rather than piling up on it.
+    const direction = i % 2 === 0 ? -1 : 1;
+    const rank = i < 2 ? 0 : 1;
+    const spread = 10 + out * (18 + rank * 12);
+    // A shallow arc: out and up, then settling back towards the ground.
+    const lift = Math.sin(Math.PI * t) * (6 + rank * 5);
+    g.fillRect(Math.round(x + direction * spread - 2), Math.round(bottom - lift - 1), 4, 2);
+  }
+
+  g.globalAlpha = previousAlpha;
+  g.fillStyle = previousFill;
+}
+
+/**
+ * The airborne equivalent of the dust: a couple of marks flicked sideways.
+ *
+ * A drawn ring reads as a diagram overlay against blocky monochrome shapes, so the
+ * displaced air borrows the ground litter's vocabulary instead. Purely lateral, with no
+ * arc, which distinguishes it from dust kicked off the ground.
+ */
+function ripple(
+  g: CanvasRenderingContext2D,
+  x: number,
+  centreY: number,
+  radius: number,
+  t: number,
+  alpha: number,
+): void {
+  const fade = (1 - t) * 0.6;
+  if (fade <= 0) return;
+
+  const previousAlpha = g.globalAlpha;
+  const previousFill = g.fillStyle;
+  g.globalAlpha = alpha * fade;
+  g.fillStyle = LIGHT;
+
+  const out = radius + 4 + ease(t) * 16;
+  for (let i = 0; i < 4; i++) {
+    const direction = i % 2 === 0 ? -1 : 1;
+    const tier = i < 2 ? -1 : 1;
+    g.fillRect(Math.round(x + direction * out - 2), Math.round(centreY + tier * 5), 5, 2);
+  }
+
+  g.globalAlpha = previousAlpha;
+  g.fillStyle = previousFill;
 }
 
 function cloud(g: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
