@@ -36,9 +36,13 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
   `sequencing-runner` per the brief and that mismatch broke deploys once; do not rename.
   Workers Builds is connected: **every push to `main` auto-deploys**. So pushing to
   main IS deploying to production.
-  - The user was asked to change the Workers Builds build command to
-    `npm test && npm run build` so a red suite cannot deploy. **Check whether they did**;
-    `.github/workflows/ci.yml` covers pushes and PRs regardless.
+  - The Workers Builds build command **is** `npm test && npm run build` — the user
+    confirmed they set it. A red unit suite therefore fails the build instead of
+    deploying, which matters because a push to `main` goes straight to production with
+    nothing else in front of it. Keep the unit suite fast and green for that reason, and
+    do not assume a push landed just because it was accepted: a failing test now shows up
+    as a build that never deployed. `.github/workflows/ci.yml` runs the same checks on
+    every branch and pull request as well.
 - **This environment**: outbound HTTPS to `workers.dev` is blocked by the sandbox proxy
   (403), so the live site cannot be fetched from here. Verify via local build + browser
   checks, then push; the user checks the live URL.
