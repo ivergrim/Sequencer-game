@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sequencing runner — chapter 1</title>
+    <meta
+      name="description"
+      content="A rhythm puzzle runner. Program the drum pattern, the pattern drives the character."
+    />
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="stage"></canvas>
+      <div id="sequencer"></div>
+      <p id="hints">
+        <span><kbd>click</kbd> toggle</span>
+        <span><kbd>space</kbd> run</span>
+        <span><kbd>R</kbd> retry</span>
+        <span><kbd>esc</kbd> clear</span>
+      </p>
+    </main>
+
+    <div id="start" role="button" tabindex="0">
+      <div class="start-inner">
+        <h1>Sequencing runner</h1>
+        <p class="start-sub">Chapter 1 &middot; deep house &middot; 124 BPM</p>
+        <p class="start-go">Click or press space to start</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

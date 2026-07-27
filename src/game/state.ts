@@ -148,9 +148,14 @@ export class GameState {
 
   // ---------------------------------------------------------------- run cycle
 
-  /** Space or R. Arms a run at the next safe bar boundary. */
+  /**
+   * Space or R. Arms a run at the next safe bar boundary.
+   *
+   * Still allowed once the chapter is complete: there is no stage left to advance to,
+   * so the run simply plays the finished pattern against the full obstacle set.
+   */
   requestRun(): void {
-    if (!this.editable || this.complete) return;
+    if (!this.editable) return;
 
     this.failure = null;
     // The count-in has to start on a bar the lookahead scheduler has not already
@@ -211,6 +216,13 @@ export class GameState {
   get runProgress(): number {
     if (this.phase !== 'running') return 0;
     return Math.min(1, Math.max(0, this.transport.barFloat - this.runBar));
+  }
+
+  /** Progress through the success flourish, 0..1. Drives the character's exit. */
+  get successProgress(): number {
+    if (this.phase !== 'success' || this.advanceAtBar === null) return 0;
+    const into = this.transport.barFloat - (this.advanceAtBar - 1);
+    return Math.min(1, Math.max(0, into));
   }
 
   /** Count-in beats remaining, 4..1, or null when not counting in. */

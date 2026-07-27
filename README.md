@@ -33,8 +33,34 @@ npm test          # single run
 npm run test:watch
 ```
 
-`simulate()` is a pure function and carries the unit tests, including a success case,
-a failure case and a carried-over-note case.
+`simulate()` is a pure function and carries the unit tests, including a success case, a
+failure case and a carried-over-note case. `test/chapter1.test.ts` pins the chapter data
+against the brief: the budget table, that every stage's derived solution clears it, and
+that stage 3 is clearable by kick on 0, 4, 8, 12 and by no other pattern within budget.
+
+### Browser checks
+
+Two things cannot be asserted without a running audio clock: that the music and the
+world never stop across ten stage transitions, and that nothing drifts. Both run against
+the dev server in a real Chromium.
+
+```sh
+npm run dev                # in one terminal
+npm run test:e2e           # in another: plays stage 1 through 10
+npm run test:e2e:drift     # five minutes, then measures alignment
+```
+
+`test:e2e` plays the whole chapter by clicking real cells, and checks the budget
+rejection, row locking, the carried-over-note failure, and that the transport is never
+restarted and never stalls.
+
+`test:e2e:drift` fills the pattern so a hit lands on every step, then records how far the
+derived `stepFloat` sits from the step each hit was scheduled for. That one number is the
+alignment error, since the character, the obstacles and the playhead all derive from
+`stepFloat`. It compares the first thirty seconds against the last.
+
+Set `E2E_CHROMIUM` to a Chromium binary if Playwright's own download is not present, and
+`E2E_MINUTES` to change the drift duration.
 
 ## Build
 

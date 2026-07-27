@@ -109,7 +109,15 @@ export class Transport {
   }
 
   private scheduleAhead(): void {
-    const horizon = this.ctx.currentTime + LOOKAHEAD_SECONDS;
+    const now = this.ctx.currentTime;
+
+    // Background tabs throttle setInterval to about once a second while the audio
+    // clock keeps running. Skip whatever went past due rather than firing a burst of
+    // it at once; position is derived, so the transport resumes exactly in phase.
+    const firstFuture = Math.ceil((now - this.startTime) / this.stepDuration);
+    if (this.nextStep < firstFuture) this.nextStep = firstFuture;
+
+    const horizon = now + LOOKAHEAD_SECONDS;
     while (this.startTime + this.nextStep * this.stepDuration < horizon) {
       const step = this.nextStep;
       const event: StepEvent = {
