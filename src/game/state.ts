@@ -1,4 +1,5 @@
 import type { Transport } from '../audio/transport';
+import { MAX_LEAD_SECONDS } from './actions';
 import { activeObstacles, activeStems, noteBudget } from './chapter1';
 import { requiredInstruments, simulate } from './simulate';
 import type { Chapter, Instrument, Obstacle, Pattern, Result } from './types';
@@ -11,10 +12,39 @@ import { countNotes, emptyPattern } from './types';
  * always audible. Nothing here ever stops the transport, reloads a scene or opens a
  * dialog, from stage 1 through stage 10 and through every failure in between.
  *
- * FAILED is entered at the collision and left on the next frame, because the brief
- * returns to EDITING immediately; editing is already unlocked while it is held.
+ * FAILED is entered at the collision and held for the death camera, then released to
+ * EDITING. Editing is never locked, so the player can already be placing notes while it
+ * plays.
  */
 export type Phase = 'editing' | 'armed' | 'running' | 'success' | 'failed';
+
+/**
+ * The death camera, in seconds.
+ *
+ * Stage presentation only. The transport, the drum voices, the backing layers and the
+ * sequencer playhead all keep running untouched through it — "freeze the run" freezes
+ * what the stage shows, not the clock.
+ */
+export const DEATH_CAMERA = {
+  /** The last 200ms of approach, dilated into this much real time. */
+  slowmo: 0.45,
+  /** Held on the culprit after the slow motion resolves. */
+  hold: 1.15,
+  /** How much of the approach is replayed. */
+  replay: 0.2,
+  /** Total time the stage stays under the camera. */
+  total: 1.6,
+};
+
+/** Fraction of the count-in bar the character spends entering from off screen left. */
+const ENTRY_FRACTION = 0.6;
+
+/** Where the character is, and whether the stage draws it at all. */
+export interface CharacterPose {
+  mode: 'hidden' | 'entering' | 'running' | 'exiting' | 'down';
+  /** 0..1 through `entering` or `exiting`; ignored otherwise. */
+  progress: number;
+}
 
 export interface Failure {
   step: number;
@@ -24,7 +54,7 @@ export interface Failure {
 }
 
 export interface StateEvents {
-  /** The collision: drives the stumble, the ground marker and the cell flash. */
+  /** The collision: drives the death camera and the ground marker. */
   onFail?: (failure: Failure) => void;
   /** The bar line where the next stage's obstacles rise into the world. */
   onStageAdvance?: (stageIndex: number) => void;
@@ -105,12 +135,16 @@ export class GameState {
 
   // ------------------------------------------------------------------ editing
 
-  get editable(): boolean {
-    return this.phase === 'editing' || this.phase === 'failed';
-  }
-
+  /**
+   * Cells are editable in every phase.
+   *
+   * Patch 1 C2 requires that nothing in the sequencer changes appearance when a run
+   * fails. Locking the grid during a run would do exactly that: the lock would lift the
+   * instant a run failed, which is a visible change caused by failing. Editing stays
+   * live throughout instead, which is also what the design asks for everywhere else.
+   */
   toggle(instrument: Instrument, step: number): void {
-    if (!this.editable || !this.isUnlocked(instrument)) return;
+    if (!this.isUnlocked(instrument)) return;
 
     const lane = this.pattern[instrument];
     if (step < 0 || step >= lane.length) return;
@@ -125,9 +159,8 @@ export class GameState {
     lane[step] = !lane[step];
   }
 
-  /** Escape: clear every note in the unlocked, currently editable rows. */
+  /** Escape: clear every note in the unlocked rows. */
   clearEditable(): void {
-    if (!this.editable) return;
     const unlocked = this.unlockedRows;
     for (const instrument of this.chapter.rows) {
       if (!unlocked.has(instrument)) continue;
@@ -153,7 +186,8 @@ export class GameState {
    * so the run simply plays the finished pattern against the full obstacle set.
    */
   requestRun(): void {
-    if (!this.editable) return;
+    // Retry is a single input, so R during the death camera cuts it short and arms.
+    if (this.phase !== 'editing' && this.phase !== 'failed') return;
 
     this.failure = null;
     // The count-in has to start on a bar the lookahead scheduler has not already
@@ -176,9 +210,11 @@ export class GameState {
 
     switch (this.phase) {
       case 'failed':
-        // Held for a single frame. The stumble, the ground marker and the cell flash
-        // outlive it; editing is unlocked already.
-        this.phase = 'editing';
+        // Held for the death camera, then released to EDITING. Editing was never
+        // locked, so the player can already be placing notes while it plays.
+        if (this.failure && this.transport.now >= this.failure.at + DEATH_CAMERA.total) {
+          this.phase = 'editing';
+        }
         break;
 
       case 'armed':
@@ -207,6 +243,61 @@ export class GameState {
       case 'editing':
         break;
     }
+  }
+
+  /**
+   * Where the character is, and whether the stage draws it at all.
+   *
+   * The character exists only for the run. During EDITING the world scrolls and the
+   * music plays with an empty stage; it enters from off screen left during the count-in
+   * and arrives at DINO_X at running speed, early enough that an anticipatory action for
+   * step 0 is already under way by the time step 0 lands.
+   */
+  get characterPose(): CharacterPose {
+    switch (this.phase) {
+      case 'editing':
+        return { mode: 'hidden', progress: 0 };
+
+      case 'armed': {
+        const into = this.transport.barFloat - this.countInBar;
+        if (into < 0) return { mode: 'hidden', progress: 0 };
+        if (into >= ENTRY_FRACTION) return { mode: 'running', progress: 1 };
+        return { mode: 'entering', progress: into / ENTRY_FRACTION };
+      }
+
+      case 'running':
+        return { mode: 'running', progress: 1 };
+
+      case 'success': {
+        const progress = this.successProgress;
+        return progress >= 1
+          ? { mode: 'hidden', progress: 1 }
+          : { mode: 'exiting', progress };
+      }
+
+      case 'failed':
+        return { mode: 'down', progress: 0 };
+    }
+  }
+
+  /** The audio time the run bar begins. */
+  get runBarTime(): number {
+    return this.transport.timeOfBar(this.runBar);
+  }
+
+  /** The longest lead any action needs, so the entry can be checked against it. */
+  get longestActionLead(): number {
+    return MAX_LEAD_SECONDS;
+  }
+
+  /**
+   * How long before the run bar the character is in position.
+   *
+   * The entry has to finish early enough for step 0's animation to have begun, which for
+   * a 400ms jump means 200ms of lead.
+   */
+  get entryHeadroomSeconds(): number {
+    return (1 - ENTRY_FRACTION) * this.transport.barDuration;
   }
 
   /** Progress through the success flourish, 0..1. Drives the character's exit. */

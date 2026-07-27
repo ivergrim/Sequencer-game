@@ -95,6 +95,16 @@ export class Transport {
   }
 
   /**
+   * The audio time a given absolute step index lands on.
+   *
+   * Computed from the transport start every time, never accumulated, so it stays exact
+   * however long the session runs.
+   */
+  timeOfStep(step: number): number {
+    return this.startTime + step * this.stepDuration;
+  }
+
+  /**
    * The first bar index beginning at or after `time`.
    *
    * Arming a run uses this with a time past the lookahead horizon, so the count-in

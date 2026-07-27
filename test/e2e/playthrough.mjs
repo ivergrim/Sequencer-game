@@ -67,6 +67,7 @@ const snapshot = () =>
       ),
       failure: s.failure && { step: s.failure.step, missing: s.failure.instrument },
       obstacles: s.obstacles.length,
+      editableDuringCamera: !document.querySelector('.seq-grid').classList.contains('busy'),
     };
   });
 
@@ -111,6 +112,20 @@ await installMonitor();
   await page.click('.seq-row[data-instrument="crash"] .seq-cell[data-step="0"]', { force: true });
   const s = await snapshot();
   check('a locked row rejects clicks', s.used === 0);
+}
+
+// ------------------------------------ the sequencer never changes for run state
+{
+  const idle = await page.evaluate(() => document.querySelector('.seq-grid').className);
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => window.__debug.state.phase === 'running', null, {
+    timeout: 15_000,
+  });
+  const running = await page.evaluate(() => document.querySelector('.seq-grid').className);
+  check('the grid looks the same while a run is in flight', idle === running, `${idle} / ${running}`);
+  await page.waitForFunction(() => window.__debug.state.phase === 'editing', null, {
+    timeout: 25_000,
+  });
 }
 
 // ------------------------------------------------------------- play all ten stages
@@ -176,7 +191,15 @@ check(
     failed.failure?.step === 8 && failed.failure?.missing === 'kick',
     JSON.stringify(failed.failure),
   );
-  check('a failure returns to EDITING immediately', failed.phase === 'editing');
+  // Patch 1 C1: FAILED now holds for the death camera before releasing, rather than
+  // returning to EDITING on the next frame.
+  check('the death camera holds on the failure', failed.phase === 'failed');
+  check('editing is never locked, even under the camera', failed.editableDuringCamera === true);
+
+  await page.waitForFunction(() => window.__debug.state.phase === 'editing', null, {
+    timeout: 10_000,
+  });
+  check('the death camera releases to EDITING on its own', (await snapshot()).phase === 'editing');
 
   const marker = await page.evaluate(() => window.__debug.state.failure !== null);
   check('the failure marker stays on the ground', marker === true);

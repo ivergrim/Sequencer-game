@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "node test/e2e/playthrough.mjs",
     "test:e2e:drift": "node test/e2e/drift.mjs",
+    "test:e2e:patch1": "node test/e2e/patch1.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {

@@ -4,13 +4,14 @@ import { getDrumBus, getLimiter, getStemBus, unlockAudio } from './audio/context
 import { triggerCountIn, triggerDrum } from './audio/drums';
 import { Stems } from './audio/stems';
 import { Transport } from './audio/transport';
+import { MAX_LEAD_SECONDS, actionTiming } from './game/actions';
 import { CHAPTER_1 } from './game/chapter1';
 import { requiredNotes } from './game/simulate';
 import { GameState } from './game/state';
 import type { Instrument } from './game/types';
 import { SequencerUI } from './ui/sequencer';
 import type { RenderObstacle } from './ui/stage';
-import { StageRenderer } from './ui/stage';
+import { BANDS, StageRenderer } from './ui/stage';
 
 /**
  * Entry and wiring.
@@ -33,10 +34,17 @@ const startOverlay = document.querySelector<HTMLElement>('#start')!;
 
 let started = false;
 
-/** Character actions waiting for the audio clock to reach the time they were scheduled for. */
+/**
+ * A character action waiting for its start time.
+ *
+ * Animations start before their step, by `duration * impactRatio`, so they cannot ride
+ * on the audio scheduler: a 400ms jump starts 200ms early, and the lookahead only hands
+ * out steps 100ms ahead. The frame loop schedules them instead, off the same clock.
+ */
 interface PendingAction {
-  time: number;
-  hits: Instrument[];
+  instrument: Instrument;
+  start: number;
+  duration: number;
 }
 
 async function start(): Promise<void> {
@@ -48,17 +56,15 @@ async function start(): Promise<void> {
 
   const transport = new Transport(ctx, chapter.bpm, chapter.patternLength);
   const stems = new Stems(transport.stepDuration);
-  const stage = new StageRenderer(canvas, transport.stepDuration);
+  const stage = new StageRenderer(canvas);
 
   const state = new GameState(chapter, transport, {
-    onFail: (failure) => {
-      stage.stumble(failure.at);
-      sequencer.flash(failure.instrument, failure.step);
-    },
+    // Nothing happens in the sequencer on failure. The stage's death camera is the
+    // whole of the feedback, by design.
     onStageAdvance: (index) => {
       // The next stage's obstacles rise into the world on this bar line.
       for (const obstacle of chapter.stages[index]!.obstacles) {
-        renderObstacles.push({ ...obstacle, addedAt: transport.now });
+        renderObstacles.push({ ...obstacle, stage: index, addedAt: transport.now });
       }
     },
     onBudgetReject: () => sequencer.shakeBudget(),
@@ -73,6 +79,8 @@ async function start(): Promise<void> {
 
   const renderObstacles: RenderObstacle[] = [];
   const pending: PendingAction[] = [];
+  /** Next absolute step whose animations have not been worked out yet. */
+  let animCursor = 0;
 
   // Every layer is attempted; a missing file falls back to a synthesized substitute,
   // so this resolving or not never blocks the transport.
@@ -91,18 +99,17 @@ async function start(): Promise<void> {
     // The player's pattern is always audible, in every state. Editing is live: this
     // reads the pattern as it stands when the step is scheduled, so a toggle lands on
     // the very next pass.
-    const hits = state.hitsAt(event.stepInBar);
-    if (hits.length > 0) {
-      for (const instrument of hits) triggerDrum(instrument, event.time);
-      pending.push({ time: event.time, hits });
-    }
+    //
+    // Audio only. The drum hit for step S fires at exactly stepTime(S); its animation
+    // was started earlier, by the frame loop.
+    for (const instrument of state.hitsAt(event.stepInBar)) triggerDrum(instrument, event.time);
   });
 
   transport.start();
 
   // Stage 1's obstacles rise in as the first bar begins.
   for (const obstacle of chapter.stages[0]!.obstacles) {
-    renderObstacles.push({ ...obstacle, addedAt: transport.timeOfBar(0) });
+    renderObstacles.push({ ...obstacle, stage: 0, addedAt: transport.timeOfBar(0) });
   }
 
   installControls(state);
@@ -123,20 +130,61 @@ async function start(): Promise<void> {
         stemBus: getStemBus(),
         limiter: getLimiter(),
         solution: () => requiredNotes(state.obstacles),
+        renderObstacles,
+        bands: BANDS,
       },
     });
+  }
+
+  /**
+   * Work out when each upcoming hit's animation has to start, and release it when the
+   * clock reaches that time.
+   *
+   * Every action clears its obstacle partway through, so it has to begin before the step
+   * rather than on it. The step's own drum hit is untouched and still fires at
+   * stepTime(S): audio and animation decouple, which is the whole point of B2.
+   */
+  function scheduleAnimations(now: number): void {
+    // Catch up without firing a burst if the frame loop was parked in a background tab.
+    if (animCursor < transport.absoluteStepFloat - 2) {
+      animCursor = Math.floor(transport.absoluteStepFloat);
+    }
+
+    while (transport.timeOfStep(animCursor) - MAX_LEAD_SECONDS <= now) {
+      const stepInBar = ((animCursor % chapter.patternLength) + chapter.patternLength) %
+        chapter.patternLength;
+      const stepTime = transport.timeOfStep(animCursor);
+
+      for (const instrument of chapter.rows) {
+        const lane = state.pattern[instrument];
+        if (!lane[stepInBar]) continue;
+        const { duration, lead } = actionTiming(
+          instrument,
+          lane,
+          stepInBar,
+          transport.stepDuration,
+        );
+        pending.push({ instrument, start: stepTime - lead, duration });
+      }
+      animCursor++;
+    }
+
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const action = pending[i]!;
+      if (action.start > now) continue;
+      pending.splice(i, 1);
+      // Drop anything that fell far enough behind to be meaningless.
+      if (now - action.start < action.duration) {
+        stage.triggerAction(action.instrument, action.start, action.duration);
+      }
+    }
   }
 
   function frame(): void {
     state.update();
 
-    // Release the visual actions whose audio has now landed, so the character moves
-    // with the sound rather than with the frame that queued it.
     const now = transport.now;
-    while (pending.length > 0 && pending[0]!.time <= now) {
-      const due = pending.shift()!;
-      for (const instrument of due.hits) stage.triggerAction(instrument, due.time);
-    }
+    scheduleAnimations(now);
 
     const stepFloat = transport.stepFloat;
     sequencer.update(state, stepFloat);
@@ -144,12 +192,13 @@ async function start(): Promise<void> {
       stepFloat,
       now,
       patternLength: chapter.patternLength,
+      stepDuration: transport.stepDuration,
       obstacles: renderObstacles,
       phase: state.phase,
+      character: state.characterPose,
       failure: state.failure,
       countInBeat: state.countInBeat,
-      exit: state.successProgress,
-      complete: state.complete,
+      currentStage: state.complete ? null : state.stageIndex,
     });
 
     requestAnimationFrame(frame);

@@ -17,7 +17,7 @@ const STATUS: Record<Phase, string> = {
   armed: 'count in',
   running: 'running',
   success: 'clear',
-  failed: 'missed',
+  failed: 'editing', // never shown: FAILED is reported as EDITING, see update()
 };
 
 export class SequencerUI {
@@ -37,7 +37,6 @@ export class SequencerUI {
   private lastBudget = '';
   private lastStatus = '';
   private lastStageLabel = '';
-  private lastBusy: boolean | null = null;
 
   constructor(
     container: HTMLElement,
@@ -135,17 +134,16 @@ export class SequencerUI {
       this.stageLabel.textContent = stageText;
     }
 
-    const statusText = state.complete && state.phase === 'editing' ? 'free play' : STATUS[state.phase];
+    // FAILED reads as EDITING here on purpose. Nothing in the sequencer may change
+    // appearance when a run fails: the stage says which obstacle and therefore which
+    // instrument, and working out which step from its position against the quarter-note
+    // scenery is the skill the game exists to teach.
+    const phase = state.phase === 'failed' ? 'editing' : state.phase;
+    const statusText = state.complete && phase === 'editing' ? 'free play' : STATUS[phase];
     if (statusText !== this.lastStatus) {
       this.lastStatus = statusText;
       this.status.textContent = statusText;
-      this.status.dataset.phase = state.phase;
-    }
-
-    const busy = !state.editable;
-    if (busy !== this.lastBusy) {
-      this.lastBusy = busy;
-      this.grid.classList.toggle('busy', busy);
+      this.status.dataset.phase = phase;
     }
   }
 
@@ -173,15 +171,6 @@ export class SequencerUI {
     }
   }
 
-  /** The cell whose missing note ended the run. */
-  flash(instrument: Instrument, step: number): void {
-    const cell = this.cells.get(instrument)?.[step];
-    if (!cell) return;
-    cell.classList.remove('flash');
-    void cell.offsetWidth; // restart the animation
-    cell.classList.add('flash');
-    cell.addEventListener('animationend', () => cell.classList.remove('flash'), { once: true });
-  }
 
   /** Placing a note with zero budget remaining. */
   shakeBudget(): void {

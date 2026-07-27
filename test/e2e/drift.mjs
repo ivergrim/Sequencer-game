@@ -19,7 +19,7 @@ const MINUTES = Number(process.env.E2E_MINUTES ?? 5);
 const { browser, page, errors } = await openGame();
 
 await page.evaluate(() => {
-  const { transport, stage, state, chapter } = window.__debug;
+  const { transport, state, chapter } = window.__debug;
 
   const samples = [];
   window.__drift = {
@@ -27,43 +27,42 @@ await page.evaluate(() => {
     anchor: transport.timeOfBar(0),
     anchorMoved: false,
     barTimeError: 0,
-    lead: { min: Infinity, max: -Infinity },
   };
 
-  // Fill the whole pattern so hits land on every step of every bar.
+  // Fill the whole pattern so a hit lands on every step of every bar.
   for (const row of chapter.rows) state.pattern[row].fill(true);
 
-  const original = stage.triggerAction.bind(stage);
-  stage.triggerAction = (instrument, at) => {
-    const stepFloat = transport.stepFloat;
-    const scheduledStep = Math.round((at - window.__drift.anchor) / transport.stepDuration);
-    const expected = ((scheduledStep % chapter.patternLength) + chapter.patternLength) %
-      chapter.patternLength;
+  // Every scheduled step, with the exact audio time it will sound on. Measuring the
+  // audio path directly rather than the character: animations now deliberately start
+  // before their step, so they are the wrong thing to measure alignment with.
+  const queue = [];
+  transport.onStep((event) => queue.push({ time: event.time, stepInBar: event.stepInBar }));
 
-    // Wrap the difference into [-8, 8) so a sample taken across the bar line is honest.
-    let delta = stepFloat - expected;
-    const half = chapter.patternLength / 2;
-    if (delta > half) delta -= chapter.patternLength;
-    if (delta < -half) delta += chapter.patternLength;
+  const watch = () => {
+    const now = transport.now;
+    while (queue.length > 0 && queue[0].time <= now) {
+      const due = queue.shift();
+      const stepFloat = transport.stepFloat;
 
-    samples.push({
-      t: transport.elapsed,
-      stepError: delta,
-      releaseLag: transport.now - at,
-    });
+      // Wrap the difference into [-8, 8) so a sample across the bar line stays honest.
+      let delta = stepFloat - due.stepInBar;
+      const half = chapter.patternLength / 2;
+      if (delta > half) delta -= chapter.patternLength;
+      if (delta < -half) delta += chapter.patternLength;
 
-    if (transport.timeOfBar(0) !== window.__drift.anchor) window.__drift.anchorMoved = true;
+      samples.push({ t: transport.elapsed, stepError: delta, releaseLag: now - due.time });
 
-    // The bar anchor must stay exact: bar N begins at start + N * barDuration, with no
-    // accumulation from bar N-1.
-    const bar = Math.floor(transport.absoluteStepFloat / chapter.patternLength);
-    const error = Math.abs(
-      transport.timeOfBar(bar) - (window.__drift.anchor + bar * transport.barDuration),
-    );
-    if (error > window.__drift.barTimeError) window.__drift.barTimeError = error;
+      if (transport.timeOfBar(0) !== window.__drift.anchor) window.__drift.anchorMoved = true;
 
-    return original(instrument, at);
+      const bar = Math.floor(transport.absoluteStepFloat / chapter.patternLength);
+      const error = Math.abs(
+        transport.timeOfBar(bar) - (window.__drift.anchor + bar * transport.barDuration),
+      );
+      if (error > window.__drift.barTimeError) window.__drift.barTimeError = error;
+    }
+    requestAnimationFrame(watch);
   };
+  requestAnimationFrame(watch);
 
   // Watch the sequencer playhead against the same derived position.
   //
@@ -74,14 +73,14 @@ await page.evaluate(() => {
   const playhead = [];
   window.__playhead = playhead;
   const el = document.querySelector('.seq-playhead');
-  const watch = () => {
+  const watchHead = () => {
     const shown = parseFloat(getComputedStyle(el).getPropertyValue('--step'));
     let delta = Math.abs(shown - transport.stepFloat);
     if (delta > chapter.patternLength / 2) delta = chapter.patternLength - delta;
     playhead.push({ t: transport.elapsed, delta });
-    requestAnimationFrame(watch);
+    requestAnimationFrame(watchHead);
   };
-  requestAnimationFrame(watch);
+  requestAnimationFrame(watchHead);
 });
 
 console.log(`running for ${MINUTES} minute(s)...`);

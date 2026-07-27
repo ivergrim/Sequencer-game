@@ -52,7 +52,7 @@ body {
 #stage {
   display: block;
   width: 100%;
-  height: 250px;
+  height: 360px;
   background: var(--paper);
   touch-action: none;
 }
@@ -93,10 +93,6 @@ body {
 .seq-status[data-phase="armed"],
 .seq-status[data-phase="running"] {
   color: var(--ink-strong);
-}
-
-.seq-status[data-phase="failed"] {
-  color: var(--fail);
 }
 
 .seq-budget {
@@ -196,24 +192,11 @@ body {
   border-color: var(--ink);
 }
 
-.seq-cell.flash .pad {
-  animation: flash 900ms steps(1) 3;
-  background: var(--fail);
-  border-color: var(--fail);
-}
-
-@keyframes flash {
-  0%,
-  49% {
-    background: var(--fail);
-    border-color: var(--fail);
-  }
-  50%,
-  100% {
-    background: transparent;
-    border-color: var(--fail);
-  }
-}
+/*
+ * There is deliberately no failure styling here. Nothing in the sequencer changes
+ * appearance when a run fails: the stage's death camera names the obstacle, and working
+ * out which step it sits on is the puzzle.
+ */
 
 /* A row is locked and greyed until a stage introduces an obstacle mapping to it. */
 .seq-row.locked {
@@ -254,16 +237,6 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Editing is live; the grid only locks while a run is armed or in flight. */
-.seq-grid.busy .seq-cell {
-  cursor: default;
-  pointer-events: none;
-}
-
-.seq-grid.busy .seq-name {
-  opacity: 0.55;
 }
 
 .seq-playhead {
@@ -357,8 +330,7 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .seq-budget.shake,
   .seq-row.unlocking,
-  .start-go,
-  .seq-cell.flash .pad {
+  .start-go {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }
