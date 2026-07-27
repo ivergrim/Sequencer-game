@@ -25,21 +25,23 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
 ## Working setup
 
 - **Repo**: `ivergrim/Sequencer-game` on GitHub. Owner: ivergrim (ivergrim@gmail.com).
-- **Branches**: work is developed on a `claude/*` branch and pushed to **both** that
-  branch and `main` (`git push origin HEAD:main`) after each verified chunk. The two are
-  kept identical — the session branch is where the harness requires work to land, and
-  `main` is what deploys; it is not a divergent line of work. GitHub's default branch
-  **is** `main` now (confirmed via the API, `default_branch: main`); the older note
-  saying otherwise was stale.
-  - Old session branches (`claude/handoff-previous-chat-js1l1d`,
-    `claude/prototype-brief-review-wg8611`) are fully merged into `main` and hold
-    nothing. They are the user's to delete; do not delete a remote branch unasked — and
-    note that **this environment cannot delete one even when asked**: the git proxy
-    accepts the connection and then hangs up on any delete-ref push
+- **Branches**: **`main` only.** It is the default branch and the one that deploys.
+  Earlier sessions each developed on a `claude/*` branch and pushed the same commits to
+  both, which left a trail of merged duplicates holding nothing; the user deleted all of
+  them and consolidated. Work goes to `main`.
+  - A session harness may still *designate* a `claude/*` branch to develop on. If it
+    does, treat it as a transient mirror of `main`, not a line of work — push the same
+    commits to `main` in the same breath, and expect the user to want the mirror gone
+    afterwards. Do not leave one behind and do not open a PR unless asked.
+  - **This environment cannot delete a remote branch**, so cleanup falls to the user:
+    the git proxy accepts the connection and then hangs up on any delete-ref push
     (`send-pack: unexpected disconnect`, then `Everything up-to-date`), the GitHub MCP
-    server exposes `create_branch` but no delete, and there is no `gh` CLI. Branch
-    cleanup is a dashboard action for the user: Branches → the trash icon. Do not read
-    that `Everything up-to-date` as success; it is the failure.
+    server exposes `create_branch` but no delete, and there is no `gh` CLI. It is a
+    dashboard action: Branches → the trash icon. Do not read that `Everything
+    up-to-date` as success; it is the failure.
+  - Never delete a remote branch unasked, and check containment before deleting one that
+    was asked for: `git merge-base --is-ancestor origin/<branch> origin/main`, plus
+    `git log --all --not origin/main` coming back empty.
 - **Deploy**: Cloudflare **Workers with static assets** (not Pages). Worker name in
   `wrangler.toml` is `sequencer-game` — this MUST match the worker the user created in
   the dashboard (`sequencer-game.ivergrim.workers.dev`). It was originally
@@ -309,13 +311,20 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 
 ## State at handoff
 
-All 77 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` and the
-5-minute `test:e2e:drift` all green; build and typecheck clean. Latest work pushed to
-both branches.
+All 80 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` and the
+5-minute `test:e2e:drift` all green; build and typecheck clean. Everything is on `main`,
+which is the only branch the repo has now.
 
-The last session worked through a full review batch: the run-decision snapshot, audio
-cues + note audition, free play, the stuck-player hint, persistence + restart, audio
-resume + DPR handling, touch controls + responsive layout, and CI + housekeeping.
+The last session was a presentation batch: receded obstacles brought back up out of the
+paper, the crossing announcement made much louder (amplitude only — duration and the
+vertical swell are both pinned by tests), the quarter-note clouds announcing along with
+it, sequencer rows arriving one instrument at a time instead of sitting greyed, the key
+hints folded into the buttons that perform them, and run promoted to a banner above the
+stage that withdraws while a run is under way.
+
+The session before it worked through a full review batch: the run-decision snapshot,
+audio cues + note audition, free play, the stuck-player hint, persistence + restart,
+audio resume + DPR handling, touch controls + responsive layout, and CI + housekeeping.
 
 Open items the user has deferred rather than declined:
 
