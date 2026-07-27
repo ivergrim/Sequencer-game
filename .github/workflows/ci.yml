@@ -1,0 +1,33 @@
+# Every push to main deploys to production through Workers Builds, so main has to be
+# green. This runs the checks a deploy does not: the unit suite and the type checker.
+#
+# The e2e suites are deliberately absent. They need a dev server and a real Chromium
+# with an audio sink; they are the pre-push check, run locally.
+name: checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

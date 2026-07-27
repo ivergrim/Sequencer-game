@@ -1,5 +1,5 @@
 {
-  "name": "sequencing-runner",
+  "name": "sequencer-game",
   "private": true,
   "version": "0.1.1",
   "type": "module",
@@ -13,6 +13,7 @@
     "test:e2e:drift": "node test/e2e/drift.mjs",
     "test:e2e:patch1": "node test/e2e/patch1.mjs",
     "test:e2e:responsive": "node test/e2e/responsive.mjs",
+    "test:e2e:shots": "node test/e2e/shots.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
