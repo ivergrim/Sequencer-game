@@ -33,7 +33,13 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
   saying otherwise was stale.
   - Old session branches (`claude/handoff-previous-chat-js1l1d`,
     `claude/prototype-brief-review-wg8611`) are fully merged into `main` and hold
-    nothing. They are the user's to delete; do not delete a remote branch unasked.
+    nothing. They are the user's to delete; do not delete a remote branch unasked — and
+    note that **this environment cannot delete one even when asked**: the git proxy
+    accepts the connection and then hangs up on any delete-ref push
+    (`send-pack: unexpected disconnect`, then `Everything up-to-date`), the GitHub MCP
+    server exposes `create_branch` but no delete, and there is no `gh` CLI. Branch
+    cleanup is a dashboard action for the user: Branches → the trash icon. Do not read
+    that `Everything up-to-date` as success; it is the failure.
 - **Deploy**: Cloudflare **Workers with static assets** (not Pages). Worker name in
   `wrangler.toml` is `sequencer-game` — this MUST match the worker the user created in
   the dashboard (`sequencer-game.ivergrim.workers.dev`). It was originally
