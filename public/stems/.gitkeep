@@ -1,0 +1,5 @@
+# Drop one-bar WAV loops here, named after the stems in src/game/chapter1.ts:
+# bass, sub, bassline, pad, stab, chop, sweep, pad2, chords, lead
+#
+# The app runs with this directory empty. Every layer falls back to a
+# synthesized substitute. See README.md for the loop constraints.
