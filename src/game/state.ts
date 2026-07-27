@@ -91,6 +91,8 @@ export interface StateEvents {
   onSuccess?: (flourishTime: number) => void;
   /** The bar line where the next stage's obstacles rise into the world. */
   onStageAdvance?: (stageIndex: number) => void;
+  /** The chapter is finished: free play begins and the obstacles leave the world. */
+  onComplete?: () => void;
   /** A note placed with zero budget remaining. */
   onBudgetReject?: () => void;
 }
@@ -164,6 +166,8 @@ export class GameState {
   }
 
   get unlockedRows(): Set<Instrument> {
+    // Free play: the whole kit, no puzzle attached.
+    if (this.complete) return new Set(this.chapter.rows);
     return requiredInstruments(this.obstacles);
   }
 
@@ -206,7 +210,9 @@ export class GameState {
     const lane = this.pattern[instrument];
     if (step < 0 || step >= lane.length) return;
 
-    if (!lane[step] && this.used >= this.budget) {
+    // Free play has no budget: extra hits were always harmless by rule, and with the
+    // chapter finished there is nothing left to brute-force.
+    if (!this.complete && !lane[step] && this.used >= this.budget) {
       // The budget is exact. Placing a wrong note is never punished with a failure;
       // the player simply cannot afford both the wrong note and the right one.
       this.events.onBudgetReject?.();
@@ -255,10 +261,12 @@ export class GameState {
   /**
    * Space or R. Arms a run at the next safe bar boundary.
    *
-   * Still allowed once the chapter is complete: there is no stage left to advance to,
-   * so the run simply plays the finished pattern against the full obstacle set.
+   * Gone once the chapter is complete: free play has no obstacles, so a run has
+   * nothing to succeed or fail against. The character is already on stage performing
+   * the track, which is what a run was for.
    */
   requestRun(): void {
+    if (this.complete) return;
     // Retry is a single input, so R during the death camera cuts it short and arms.
     if (this.phase !== 'editing' && this.phase !== 'failed') return;
 
@@ -445,18 +453,24 @@ export class GameState {
     this.advanceAtBar = null;
     this.runResult = null;
 
-    // Everything on the grid cleared this stage, so it is all correct. Commit it.
-    for (const instrument of this.chapter.rows) {
-      const lane = this.pattern[instrument];
-      const committed = this.locked[instrument];
-      for (let step = 0; step < lane.length; step++) {
-        if (lane[step]) committed[step] = true;
-      }
-    }
-
     if (this.stageIndex + 1 >= this.chapter.stages.length) {
+      // The chapter is done and free play begins: the obstacles leave the world, so
+      // there is nothing left for a lock to protect. Everything unlocks, and the
+      // finished pattern becomes an instrument.
       this.complete = true;
+      for (const instrument of this.chapter.rows) {
+        this.locked[instrument].fill(false);
+      }
+      this.events.onComplete?.();
     } else {
+      // Everything on the grid cleared this stage, so it is all correct. Commit it.
+      for (const instrument of this.chapter.rows) {
+        const lane = this.pattern[instrument];
+        const committed = this.locked[instrument];
+        for (let step = 0; step < lane.length; step++) {
+          if (lane[step]) committed[step] = true;
+        }
+      }
       this.stageIndex++;
       this.events.onStageAdvance?.(this.stageIndex);
     }

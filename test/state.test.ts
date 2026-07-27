@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Transport } from '../src/audio/transport';
 import { CHAPTER_1 } from '../src/game/chapter1';
+import { requiredNotes } from '../src/game/simulate';
+import type { StateEvents } from '../src/game/state';
 import { DEATH_CAMERA, GameState, RUN_DECISION_LEAD } from '../src/game/state';
 
 /**
@@ -38,10 +40,25 @@ class StubClock {
   }
 }
 
-function make() {
+function make(events: StateEvents = {}) {
   const clock = new StubClock();
-  const state = new GameState(CHAPTER_1, clock as unknown as Transport);
+  const state = new GameState(CHAPTER_1, clock as unknown as Transport, events);
   return { clock, state };
+}
+
+/** Place the derived solution, run it, and walk the clock through to the advance. */
+function clearStage(clock: StubClock, state: GameState): void {
+  for (const note of requiredNotes(state.obstacles)) {
+    if (!state.pattern[note.instrument][note.step]) state.toggle(note.instrument, note.step);
+  }
+  state.requestRun();
+  const runBar = clock.nextBarBoundary(clock.now + 0.15) + 1;
+  clock.now = clock.timeOfBar(runBar) - RUN_DECISION_LEAD + 0.001;
+  state.update();
+  clock.now = clock.timeOfBar(runBar + 1) + 0.001;
+  state.update();
+  clock.now = clock.timeOfBar(runBar + 2) + 0.001;
+  state.update();
 }
 
 /** Arm a run and advance the clock to just past the run decision. */
@@ -139,6 +156,13 @@ describe('the run pattern snapshot', () => {
     expect(state.hitsAt(0, runBar)).toEqual([]);
   });
 
+  it('locks notes on an ordinary stage clear', () => {
+    const { clock, state } = make();
+    clearStage(clock, state);
+    expect(state.stageIndex).toBe(1);
+    expect(state.isLocked('kick', 0)).toBe(true);
+  });
+
   it('keeps the final count-in beat visible across the early decision', () => {
     const { clock, state } = make();
     state.toggle('kick', 0);
@@ -152,5 +176,54 @@ describe('the run pattern snapshot', () => {
 
     clock.now = clock.timeOfBar(runBar) + 0.05;
     expect(state.countInBeat).toBeNull();
+  });
+});
+
+describe('free play after chapter completion', () => {
+  function completeChapter(events: StateEvents = {}) {
+    const made = make(events);
+    for (let i = 0; i < CHAPTER_1.stages.length; i++) clearStage(made.clock, made.state);
+    return made;
+  }
+
+  it('completes the chapter and fires onComplete once', () => {
+    let completions = 0;
+    const { state } = completeChapter({ onComplete: () => completions++ });
+    expect(state.complete).toBe(true);
+    expect(state.phase).toBe('editing');
+    expect(completions).toBe(1);
+  });
+
+  it('unlocks every row and every committed note', () => {
+    const { state } = completeChapter();
+    expect(state.unlockedRows.size).toBe(CHAPTER_1.rows.length);
+    for (const row of CHAPTER_1.rows) {
+      for (let step = 0; step < CHAPTER_1.patternLength; step++) {
+        expect(state.isLocked(row, step)).toBe(false);
+      }
+    }
+    // The full track survives the unlock.
+    expect(state.used).toBe(21);
+  });
+
+  it('lifts the budget', () => {
+    const { state } = completeChapter();
+    const before = state.used;
+    state.toggle('crash', 8); // nothing requires this, and the budget is long spent
+    expect(state.used).toBe(before + 1);
+    // And notes that used to be committed can now be removed.
+    state.toggle('kick', 0);
+    expect(state.used).toBe(before);
+  });
+
+  it('has no runs', () => {
+    const { state } = completeChapter();
+    state.requestRun();
+    expect(state.phase).toBe('editing');
+  });
+
+  it('keeps the character performing', () => {
+    const { state } = completeChapter();
+    expect(state.characterPose).toEqual({ mode: 'running', progress: 1 });
   });
 });

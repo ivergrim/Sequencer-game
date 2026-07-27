@@ -12,7 +12,7 @@ import { GameState } from './game/state';
 import type { Instrument } from './game/types';
 import { SequencerUI } from './ui/sequencer';
 import type { RenderObstacle } from './ui/stage';
-import { BANDS, StageRenderer } from './ui/stage';
+import { BANDS, RISE_SECONDS, StageRenderer } from './ui/stage';
 
 /**
  * Entry and wiring.
@@ -70,6 +70,11 @@ async function start(): Promise<void> {
       for (const obstacle of chapter.stages[index]!.obstacles) {
         renderObstacles.push({ ...obstacle, stage: index, addedAt: transport.now });
       }
+    },
+    onComplete: () => {
+      // Free play: the puzzle is over, so the world empties. Every obstacle sinks
+      // back out the way it rose in; the frame loop prunes them once they are gone.
+      for (const obstacle of renderObstacles) obstacle.removedAt = transport.now;
     },
     onBudgetReject: () => sequencer.shakeBudget(),
   });
@@ -203,6 +208,14 @@ async function start(): Promise<void> {
 
     const now = transport.now;
     scheduleAnimations(now);
+
+    // Obstacles that finished sinking out on chapter completion are gone for good.
+    for (let i = renderObstacles.length - 1; i >= 0; i--) {
+      const obstacle = renderObstacles[i]!;
+      if (obstacle.removedAt !== undefined && now - obstacle.removedAt > RISE_SECONDS) {
+        renderObstacles.splice(i, 1);
+      }
+    }
 
     const stepFloat = transport.stepFloat;
     sequencer.update(state, stepFloat);

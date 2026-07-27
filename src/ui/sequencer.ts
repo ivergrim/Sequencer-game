@@ -121,11 +121,14 @@ export class SequencerUI {
     this.syncUnlocks(state);
     this.syncPattern(state);
 
-    const budgetText = `${state.used} / ${state.budget}`;
+    // Free play has no budget, so the readout becomes a plain note count.
+    const budgetText = state.complete
+      ? `${state.used} notes`
+      : `${state.used} / ${state.budget}`;
     if (budgetText !== this.lastBudget) {
       this.lastBudget = budgetText;
       this.budget.textContent = budgetText;
-      this.budget.classList.toggle('full', state.used >= state.budget);
+      this.budget.classList.toggle('full', !state.complete && state.used >= state.budget);
     }
 
     const stageText = state.complete

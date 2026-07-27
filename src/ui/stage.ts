@@ -81,7 +81,8 @@ const HURDLE_HEIGHT = 30;
 /** The punch carries the body forward into the enemy rather than waving at it. */
 const PUNCH_LUNGE = 14;
 
-const RISE_SECONDS = 0.6;
+/** How long an obstacle takes to rise into the world, and to sink back out of it. */
+export const RISE_SECONDS = 0.6;
 
 /**
  * Where the character enters from and leaves to, as a fraction of the width, and how far
@@ -168,6 +169,8 @@ export interface RenderObstacle {
   stage: number;
   /** Audio time this obstacle rose into the world. */
   addedAt: number;
+  /** Audio time this obstacle began leaving the world, on chapter completion. */
+  removedAt?: number;
 }
 
 export interface StageFrame {
@@ -483,7 +486,13 @@ export class StageRenderer {
     marked: boolean,
   ): void {
     const { g } = this;
-    const rise = clamp01((now - obstacle.addedAt) / RISE_SECONDS);
+    // Leaving the world is the entrance played backwards: the same clip-and-drop for
+    // grounded types, the same fade for the flyers.
+    let rise = clamp01((now - obstacle.addedAt) / RISE_SECONDS);
+    if (obstacle.removedAt !== undefined) {
+      rise = Math.min(rise, 1 - clamp01((now - obstacle.removedAt) / RISE_SECONDS));
+      if (rise <= 0) return;
+    }
 
     g.save();
     g.globalAlpha = alpha;
