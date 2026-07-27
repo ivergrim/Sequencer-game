@@ -93,7 +93,7 @@ The first deploy opens a browser for `wrangler login`. `npm run deploy` does bot
 
 Connect **Workers Builds** to this GitHub repo so pushes deploy without manual steps:
 
-1. Cloudflare dashboard → Workers & Pages → the `sequencing-runner` worker → Settings → Builds
+1. Cloudflare dashboard → Workers & Pages → the `sequencer-game` worker → Settings → Builds
 2. Connect the GitHub repository
 3. Build command `npm run build`, deploy command `npx wrangler deploy`, root directory `/`
 
