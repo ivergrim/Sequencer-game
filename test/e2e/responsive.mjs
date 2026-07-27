@@ -54,7 +54,14 @@ for (const viewport of VIEWPORTS) {
       stage: box('#stage'),
       controls: box('#controls'),
       run: box('#run'),
-      hintsHidden: getComputedStyle(document.querySelector('#hints')).display === 'none',
+      keysHidden: [...document.querySelectorAll('.keys')].every(
+        (keys) => getComputedStyle(keys).display === 'none',
+      ),
+      // Every control has to be big enough to hit with a thumb, key chips or not.
+      targets: [...document.querySelectorAll('#run, #controls button')].map((b) => ({
+        id: b.id,
+        height: b.getBoundingClientRect().height,
+      })),
       // The backing store must match the CSS box times the device pixel ratio.
       backing: { width: canvas.width, height: canvas.height },
       dpr: window.devicePixelRatio,
@@ -73,15 +80,32 @@ for (const viewport of VIEWPORTS) {
     `${layout.backing.width}x${layout.backing.height} for ${layout.stage.width}x${layout.stage.height} @${layout.dpr}`,
   );
   check(
-    `${viewport.name}: the run button is on screen`,
-    layout.run !== null && layout.run.width > 0 && layout.run.x >= 0,
+    `${viewport.name}: the run banner is on screen, above the stage`,
+    layout.run !== null && layout.run.width > 0 && layout.run.x >= 0 &&
+      layout.run.y + layout.run.height <= layout.stage.y + 1,
     JSON.stringify(layout.run),
   );
   check(
-    `${viewport.name}: keyboard hints are ${viewport.touch ? 'hidden' : 'shown'}`,
-    layout.hintsHidden === viewport.touch,
-    `hidden: ${layout.hintsHidden}`,
+    `${viewport.name}: the run banner spans the stage`,
+    Math.abs(layout.run.width - layout.stage.width) <= 1,
+    `${layout.run.width} vs ${layout.stage.width}`,
   );
+  check(
+    `${viewport.name}: key chips are ${viewport.touch ? 'hidden' : 'shown'}`,
+    layout.keysHidden === viewport.touch,
+    `hidden: ${layout.keysHidden}`,
+  );
+  {
+    // 44px is the smallest target a thumb hits reliably. Desktop is allowed to be a
+    // little smaller, but never small enough to be a line of text.
+    const floor = viewport.touch ? 44 : 36;
+    const small = layout.targets.filter((t) => t.height < floor);
+    check(
+      `${viewport.name}: every control is a real target`,
+      small.length === 0 && layout.targets.length === 3,
+      layout.targets.map((t) => `${t.id} ${t.height.toFixed(0)}px`).join(', '),
+    );
+  }
 
   // The whole point: place a note and run it without touching a keyboard.
   const tap = async (selector) => {

@@ -283,8 +283,14 @@ body {
 
 /* --------------------------------------------------------------- controls */
 
-/* Every input the game has, as a button. The keyboard is the faster way in on a
-   desktop, but it is not the only way in. */
+/*
+ * Every input the game has, as a button, each one carrying its own keyboard shortcut.
+ *
+ * The shortcuts used to live in a legend under the controls, which named every action
+ * twice on a desktop and was hidden outright on a phone, where the buttons are the only
+ * way in. Printed on the button itself, the chip is a label rather than a separate list
+ * to cross-reference, and it can simply be dropped where there is no keyboard.
+ */
 #controls {
   display: flex;
   align-items: center;
@@ -294,13 +300,15 @@ body {
   text-transform: uppercase;
 }
 
-#controls button {
+/* Scoped rather than a bare `button`: the sequencer's cells are buttons too, and they
+   are a different thing entirely. */
+#controls button,
+#run {
   appearance: none;
   -webkit-appearance: none;
   background: none;
   border: 1px solid var(--line);
   border-radius: 2px;
-  padding: 0.45rem 1rem;
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
@@ -310,12 +318,53 @@ body {
   touch-action: manipulation;
 }
 
+#controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  /* A thumb's worth of button, not a line of text's worth. */
+  min-height: 2.5rem;
+  padding: 0.35rem 0.9rem;
+}
+
 #controls button:hover {
   border-color: var(--ink);
 }
 
 #controls button[hidden] {
   display: none;
+}
+
+/*
+ * The keyboard shortcut, on the button that performs it.
+ *
+ * Quieter than the label — it is an aside about a second way to do the same thing, not a
+ * second thing to do — and gone entirely on a touch device, which leaves a plain button.
+ */
+.keys {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+kbd {
+  font: inherit;
+  font-size: 10px;
+  color: var(--line);
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  padding: 0.1em 0.4em;
+}
+
+#controls button:hover kbd,
+#run:hover kbd {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+@media (pointer: coarse) {
+  .keys {
+    display: none;
+  }
 }
 
 /* Restarting the chapter wipes the save, so it sits apart from the run controls, reads
@@ -331,32 +380,86 @@ body {
   border-color: var(--fail);
 }
 
-/* ------------------------------------------------------------------ hints */
+/* ------------------------------------------------------------- run banner */
 
-#hints {
+/*
+ * Run, above the stage.
+ *
+ * It was a button among buttons under the sequencer, which is the last place a player
+ * looks and the first thing they need. Full width, above the canvas, in the paper idiom:
+ * still small — this is a strip, not a splash screen — but impossible to miss, and a real
+ * button so a phone can press it.
+ *
+ * It never leaves the layout while the chapter is unfinished. Hiding it during a run
+ * would resize the canvas at the exact moment the player is watching the world, so it
+ * goes inert and reports the phase instead.
+ */
+#run {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--line);
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.4rem 1rem;
+  font-size: 12px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-strong);
+  border-color: var(--ink);
+  /* A slow breath rather than a blink. It has to catch the eye of someone looking at the
+     sequencer without competing with the stage for someone who is already running. */
+  animation: beckon 2.6s ease-in-out infinite;
 }
 
-kbd {
-  font: inherit;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 0 0.35em;
-  margin-right: 0.4em;
+#run[hidden] {
+  display: none;
 }
 
-/* Nothing to hint at without a keyboard. */
-@media (pointer: coarse) {
-  #hints {
-    display: none;
+#run:hover {
+  background: rgba(83, 83, 83, 0.09);
+}
+
+/* A blocky play mark, in the same procedural idiom as everything else here. */
+#run .mark {
+  width: 0;
+  height: 0;
+  border-left: 9px solid currentColor;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+}
+
+/*
+ * Inert: a run is already under way. Kept exactly the same size so nothing moves, and
+ * quiet enough that the stage has the player's attention rather than this.
+ */
+#run[data-live="false"] {
+  border-color: var(--line-soft);
+  color: var(--line);
+  cursor: default;
+  animation: none;
+}
+
+/* Hidden rather than removed, both of them: the label is centred, so dropping anything
+   beside it would slide the word sideways every time a run starts. */
+#run[data-live="false"] .mark,
+#run[data-live="false"] .keys {
+  visibility: hidden;
+}
+
+#run[data-live="false"]:hover {
+  background: none;
+}
+
+/* Inset spread rather than a background, so hovering still reads over the breath. */
+@keyframes beckon {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgba(83, 83, 83, 0.07);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3rem rgba(83, 83, 83, 0.07);
   }
 }
 
@@ -447,15 +550,31 @@ kbd {
     inset: 2px 2px;
   }
 
+  /* Forty-four pixels of button, which is the smallest thing a thumb reliably hits. The
+     key chips are already gone on a touch device, so the room comes out of the padding
+     rather than out of the target. */
+  #controls {
+    gap: 0.4rem;
+  }
+
   #controls button {
-    padding: 0.55rem 0.8rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  /* The primary action, and the one most likely to be pressed with a thumb, so it gets
+     the full target height even though the stage pays for it. */
+  #run {
+    min-height: 2.75rem;
+    letter-spacing: 0.14em;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .seq-budget.shake,
   .seq-row.unlocking,
-  .start-go {
+  .start-go,
+  #run {
     animation-duration: 1ms;
     animation-iteration-count: 1;
   }

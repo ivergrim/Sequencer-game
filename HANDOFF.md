@@ -143,7 +143,19 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
     `state.toggle` — there is no element to force-click any more.
 - `ui/controls.ts` — run / clear / restart buttons, cached DOM writes, buttons blur
   after click (a focused button eats the next Space). Run button hides in free play.
-  Restart is two-press and wipes the save.
+  Restart is two-press and wipes the save (its label swaps, so it has a `.label` span
+  like the others — do not put a key chip inside the element whose textContent gets
+  replaced).
+  - **`#run` is a full-width banner above the canvas**, outside `#controls`; `button()`
+    looks it up across the document for that reason. While a run is in flight it stays
+    in the layout (moving it would resize the canvas mid-run) and goes `disabled` with
+    `data-live="false"`, reporting `count in` / `running` / `clear`. EDITING and FAILED
+    both read `run` — nothing outside the stage may reveal a failure.
+  - The separate `#hints` legend is **deleted**. Each button carries its own `<kbd>`
+    chips in a `.keys` span; `@media (pointer: coarse)` hides `.keys`, which is what the
+    responsive suite now checks instead of `#hints`. The `click / toggle` hint went with
+    it — it named no action, and a non-button in a row of buttons was the thing being
+    fixed. Buttons are ≥44px tall on touch, pinned by `test:e2e:responsive`.
 - `ui/stage.ts` — canvas renderer, the biggest file (~1100 lines). Key systems:
   - One bar = canvas width; obstacle x = `DINO_X + ((S - stepFloat + L) % L) * cell`,
     drawn twice for seamless wrap. No step grid ever drawn on stage.

@@ -18,19 +18,25 @@
   </head>
   <body>
     <main id="app">
+      <!-- Run is the one thing a player has to find, so it sits above the stage as a
+           banner rather than in the row of controls under it. It is a real button, and
+           the keys that do the same thing are printed on it rather than listed
+           separately. While a run is in flight it goes inert and reports the phase, which
+           keeps the layout from shifting under the canvas every time a run starts. -->
+      <button id="run" type="button" aria-keyshortcuts="Space R">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="label">run</span>
+        <span class="keys"><kbd>space</kbd><kbd>R</kbd></span>
+      </button>
       <canvas id="stage"></canvas>
       <div id="sequencer"></div>
       <div id="controls">
-        <button id="run" type="button">run</button>
-        <button id="clear" type="button">clear</button>
-        <button id="restart" type="button">restart chapter</button>
+        <button id="clear" type="button" aria-keyshortcuts="Escape">
+          <span class="label">clear</span>
+          <span class="keys"><kbd>esc</kbd></span>
+        </button>
+        <button id="restart" type="button"><span class="label">restart chapter</span></button>
       </div>
-      <p id="hints">
-        <span><kbd>click</kbd> toggle</span>
-        <span><kbd>space</kbd> run</span>
-        <span><kbd>R</kbd> retry</span>
-        <span><kbd>esc</kbd> clear</span>
-      </p>
     </main>
 
     <div id="start" role="button" tabindex="0">

@@ -169,14 +169,23 @@ On Looperman, filter by a single BPM and key so the layers stack.
 | Input | Action |
 |---|---|
 | Click or tap a cell | Toggle a note, and hear it |
-| Space, or the run button | Run |
-| R | Retry |
+| Space or R, or the run banner | Run — the same action either way; R is there to retry |
 | Escape, or the clear button | Clear this stage's notes (committed ones stay) |
 | Restart chapter | Wipe the save and start over — asks twice |
 
-Every input has a button as well as a key, so the game is playable on a phone. The
-keyboard hints hide themselves on touch devices, and the run button retires in free
-play.
+Every input is a button as well as a key, sized to be pressed with a thumb, so the game
+is playable on a phone. The shortcut is printed on the button that performs it rather
+than in a legend underneath: a separate list of key hints was dead weight on a phone,
+where the buttons are the only way in, and on a desktop it named every action twice. The
+chips are dropped on a touch device, which leaves plain buttons.
+
+**Run is a banner above the stage**, not a button in the row under the sequencer, because
+it is the one control a player has to find and the row under the sequencer is the last
+place they look. Full width, one line tall. It stays in the layout while a run is under
+way rather than hiding — resizing the canvas at the moment the player starts watching the
+world is exactly the wrong time to move it — and goes inert, reporting the phase. It
+reads the same in EDITING and after a failure, and it retires entirely in free play,
+where there is nothing to run against.
 
 Progress is saved continuously to `localStorage` and restored on load. A save from an
 older build, or a corrupted one, is discarded rather than trusted, so an incompatible
