@@ -152,7 +152,15 @@ export class SequencerUI {
     }
   }
 
-  /** A row unlocks when a stage first introduces an obstacle mapping to it. */
+  /**
+   * A row appears when a stage first introduces an obstacle mapping to it.
+   *
+   * Until then it is not in the layout at all: the chapter opens as a single kick lane
+   * and grows a lane per instrument as the world starts asking for it. The set only ever
+   * grows — `state.unlockedRows` is derived from the accumulated obstacle set, and this
+   * keeps its own record besides — so a row that has appeared is there for the rest of
+   * the chapter even once its stage has receded into the background.
+   */
   private syncUnlocks(state: GameState): void {
     for (const [instrument, row] of this.rows) {
       if (this.unlocked.has(instrument) || !state.isUnlocked(instrument)) continue;

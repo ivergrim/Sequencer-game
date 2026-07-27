@@ -51,12 +51,13 @@ npm run test:e2e            # in another: plays stage 1 through 10
 npm run test:e2e:drift      # five minutes, then measures alignment
 npm run test:e2e:patch1     # the patch 1 acceptance criteria
 npm run test:e2e:responsive # desktop and phone viewports, touch controls
-npm run test:e2e:shots      # captures stage art at several stages, for eyeballing
+npm run test:e2e:shots      # captures stage art, and the announcement on and off a crossing
 ```
 
 `test:e2e` plays the whole chapter by clicking real cells, and checks the budget
-rejection, row locking, that a committed note cannot be removed, and that the transport is
-never restarted and never stalls. It ends in free play: the world emptying, the grid
+rejection, that only the rows the world has asked for are on screen, that a locked
+instrument stays unplayable, that a committed note cannot be removed, and that the
+transport is never restarted and never stalls. It ends in free play: the world emptying, the grid
 unlocking, the budget lifting, runs retiring, and the whole thing surviving a reload.
 
 `test:e2e:responsive` drives a 1100px desktop and a 390px phone, checking that nothing
@@ -263,9 +264,19 @@ asks about its own new obstacles and nothing else, instead of re-presenting the 
 pattern. It also means a solved stage can never be broken.
 
 **Rows mirror the stage.** The sequencer's row order is the obstacles' vertical order:
-shaker highest, then openhat, clap, rim, and kick on the ground, with crash at the top
-where the wall's full-height silhouette and a drum kit both put it. A row and the thing it
-clears sit at the same height.
+openhat highest, then clap, rim, and kick on the ground, with crash at the top where the
+wall's full-height silhouette and a drum kit both put it. A row and the thing it clears
+sit at the same height.
+
+**The kit arrives one instrument at a time.** A row is not in the layout at all until a
+stage introduces an obstacle that asks for it, so the chapter opens as a single kick lane
+and one question. Stage 4's birds bring the open hat in, stage 5's enemies the clap,
+stage 8's totems the rim, stage 9's wall the crash. Rows used to be present but greyed
+and hatched, which still put five lanes of unanswerable questions on the first screen; an
+absent row asks nothing. Arrival is the only transition — once a row has appeared it stays
+for the rest of the chapter, whatever the current stage happens to introduce, because the
+notes already committed to it keep playing and the obstacles it answers are still out
+there.
 
 **There is one small type, not two.** The chapter originally ran a shaker alongside the
 open hat. The two sounded too close and their silhouettes read too close at speed, and no
@@ -285,7 +296,14 @@ where there is nothing to collide with, and the vertical component stays inside 
 between bands. A uniform swell large enough to be unmissable also grows each obstacle into
 its neighbours' bands, which would break the separation at exactly the moment the player
 is looking. `test/bands.test.ts` pins that the bands stay disjoint at the peak of the
-swell, including on the five steps of chapter 1 that stack obstacles.
+swell, including on the five steps of chapter 1 that stack obstacles. The pillar/totem gap
+caps the vertical component near 0.15, which is why the horizontal one carries the force.
+
+**Receded does not mean faint.** Older obstacles drop to `RECEDED_ALPHA` and a lighter
+ink, and that floor is deliberately high. They are still live hazards — every one will
+fail the run if its note goes missing — and by stage 10 eighteen of the twenty-one are
+receded, so sinking them near the paper made most of the world look like decoration. They
+sit clearly behind the current stage's arrivals and clearly in front of the ground litter.
 
 Once the chapter is cleared there is nothing left to solve, so the character stays on
 stage and performs the finished track for good — no exit, no empty stage, and no obstacle
@@ -325,6 +343,22 @@ Every obstacle then **announces itself as it crosses that spot**: a quick swell 
 back, with dust kicked off the ground or air flicked sideways for the ones that fly. It
 fires in every phase, including EDITING, so the player watches each obstacle land on its
 beat before committing to a run.
+
+The announcement is the loudest thing on the stage, and all of that comes out of
+amplitude rather than duration. It has to be finished inside two steps or consecutive
+crossings smear into one another, which `test/reaction.test.ts` pins, so instead it
+spends everything it can in the fifth of a second it has: a wide sideways swell, a burst
+of dust, and — for the fraction of a second it is crossing — a lift out of its own depth
+state, up towards foreground ink and full opacity and straight back down. That lift is
+why an open hat introduced four stages ago announces exactly as loudly as a pillar placed
+this stage, while the depth ordering at rest is left exactly as it was.
+
+**The sky announces too.** The quarter-note clouds cross the launch position on the same
+derivation and swell, darken and ride up as they do. They were always the coarse ruler;
+this makes them a metronome as well. A player who has not yet found the launch position
+can find it by watching the clouds, and every obstacle sitting on a quarter note gets a
+second announcement in the sky directly above its own. Nothing shares the sky, so that
+swell can be uniform and generous where the obstacles' has to be careful.
 
 The reaction is derived from `stepFloat` rather than fired as an event. An obstacle on
 step S is at the launch position exactly when `stepFloat` is S, so how far it is into its

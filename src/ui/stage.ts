@@ -34,7 +34,12 @@ const SOFT = '#dcdcdc';
 const FAIL = '#c1554b';
 const PAPER = '#f7f7f7';
 /** Receded obstacles desaturate towards this rather than shrinking. */
-const RECEDED_INK = '#909090';
+const RECEDED_INK = '#7c7c7c';
+/**
+ * Dust and displaced air. A step darker than the ground litter it borrows its shapes
+ * from, because it has to read in the fraction of a second it exists for.
+ */
+const DUST = '#a5a5a5';
 
 export const STAGE_HEIGHT = 360;
 const GROUND_Y = 292;
@@ -49,8 +54,16 @@ const GROUND_Y = 292;
  */
 const DINO_FRACTION = 0.28;
 
-/** How far a receded obstacle drops in opacity. A hard floor, so small types survive it. */
-const RECEDED_ALPHA = 0.26;
+/**
+ * How far a receded obstacle drops in opacity. A hard floor, so small types survive it.
+ *
+ * Depth has to be readable without the older obstacles becoming scenery. They are still
+ * live hazards — every one of them will fail the run if its note goes missing — and a
+ * stage-10 player is looking at eighteen of them, so sinking them almost into the paper
+ * made most of the world look decorative. They sit clearly behind the current stage's
+ * arrivals and clearly in front of the ground litter.
+ */
+const RECEDED_ALPHA = 0.58;
 
 /**
  * Emphasis on the obstacles this stage introduced.
@@ -121,9 +134,39 @@ const REACTION_SECONDS = 0.22;
  * separation at exactly the moment the player is looking at it. Almost all of the punch
  * goes sideways, where there is nothing to collide with; the vertical component stays
  * inside the gaps between bands. `test/bands.test.ts` pins that.
+ *
+ * The horizontal component is where the announcement gets its force from, and it can be
+ * spent freely: the swell peaks while the obstacle is alone at the launch position, and
+ * anything sharing its step sits in a different band. The vertical component is capped
+ * near 0.15 by the pillar/totem gap, so it is not the axis to push.
  */
-export const SWELL_X = 0.75;
-export const SWELL_Y = 0.12;
+export const SWELL_X = 1.15;
+export const SWELL_Y = 0.13;
+
+/**
+ * How far an announcement lifts an obstacle out of its depth state, and towards full ink.
+ *
+ * Duration is not available as an axis — the announcement has to be finished inside two
+ * steps or crossings start to smear into each other, which `test/reaction.test.ts` pins —
+ * so the extra emphasis is bought in amplitude instead. A receded obstacle briefly comes
+ * up to nearly foreground weight as it crosses and drops straight back, which is what
+ * makes an old, small hat announce as loudly as a new pillar without ever confusing the
+ * two at rest.
+ */
+const ANNOUNCE_ALPHA_LIFT = 0.4;
+
+/**
+ * The sky answers the launch position too.
+ *
+ * The quarter-note clouds have always been the coarse ruler; letting them announce as they
+ * cross makes them a metronome as well, and puts an announcement directly above every
+ * obstacle that sits on a quarter. Nothing shares the sky, so this swell can be uniform
+ * and generous where the obstacles' has to be careful.
+ */
+const CLOUD_SWELL = 0.34;
+const CLOUD_LIFT = 7;
+/** How far a crossing cloud darkens out of the sky towards the ink. */
+const CLOUD_INK = 0.5;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
@@ -437,6 +480,12 @@ export class StageRenderer {
   /**
    * Four elements per bar, on the quarter notes only. Never on sixteenths.
    *
+   * They announce as they cross the launch position, exactly as the obstacles below them
+   * do and off the same derivation. The sky then pulses on the quarter notes, which is
+   * the beat the whole chapter is built on: a player who has not yet worked out where the
+   * launch position is can find it by watching the clouds, and every obstacle sitting on a
+   * quarter gets an announcement in the sky directly above its own.
+   *
    * `ink` exists for the death camera's hint, which redraws these over the dim: at
    * their usual weight they would come back barely stronger than the dimmed stage, and
    * reading the culprit against them is the whole point of putting them back.
@@ -452,11 +501,26 @@ export class StageRenderer {
     const { g } = this;
     for (let quarter = 0; quarter < 4; quarter++) {
       const step = (quarter * frame.patternLength) / 4;
+      const reaction = reactionAt(step, stepFloat, frame.patternLength, frame.stepDuration);
+      const punch = reaction === null ? 0 : pop(reaction);
+      // The downbeat's cloud sits higher and wider, so the bar line is findable.
+      const downbeat = quarter === 0;
+      const y = downbeat ? 20 : 38 + (quarter % 2) * 10;
+      const scale = downbeat ? 1.25 : 1;
+
       this.eachWrap(step, stepFloat, frame.patternLength, cell, dinoX, w, (x) => {
-        g.fillStyle = ink;
-        // The downbeat's cloud sits higher and wider, so the bar line is findable.
-        const downbeat = quarter === 0;
-        cloud(g, x, downbeat ? 20 : 38 + (quarter % 2) * 10, downbeat ? 1.25 : 1);
+        g.save();
+        g.fillStyle = punch > 0 ? mixInk(ink, INK, punch * CLOUD_INK) : ink;
+        if (punch > 0) {
+          // Swell about the cloud's own middle and ride up a little, so it reads as the
+          // sky reacting rather than as a cloud that grew.
+          const centreY = y + 7 * scale;
+          g.translate(x, centreY - punch * CLOUD_LIFT);
+          g.scale(1 + punch * CLOUD_SWELL, 1 + punch * CLOUD_SWELL);
+          g.translate(-x, -centreY);
+        }
+        cloud(g, x, y, scale);
+        g.restore();
       });
     }
   }
@@ -549,9 +613,18 @@ export class StageRenderer {
       if (rise <= 0) return;
     }
 
+    // An announcement is worth as much emphasis as it can be given without touching the
+    // axes it would corrupt. Size belongs to weight and opacity to depth — but only at
+    // rest: for the fifth of a second an obstacle is crossing the launch position it
+    // borrows both, coming up towards foreground ink and full opacity and dropping
+    // straight back. Every obstacle announces at the same strength whatever its age, which
+    // is the point; the moment it passes, the depth ordering is exactly as it was.
+    const punch = reaction === null ? 0 : pop(reaction);
+    const announced = Math.min(1, alpha + punch * ANNOUNCE_ALPHA_LIFT);
+
     g.save();
-    g.globalAlpha = alpha;
-    g.fillStyle = foreground ? INK : RECEDED_INK;
+    g.globalAlpha = announced;
+    g.fillStyle = foreground ? INK : mixInk(RECEDED_INK, INK, punch);
 
     const band = BANDS[obstacle.type];
     const bottom = GROUND_Y - band.bottom;
@@ -567,7 +640,7 @@ export class StageRenderer {
         g.clip();
         g.translate(0, (1 - ease(rise)) * (band.top + 20));
       } else {
-        g.globalAlpha = alpha * rise;
+        g.globalAlpha = announced * rise;
       }
     }
 
@@ -582,7 +655,6 @@ export class StageRenderer {
     // The obstacle announces itself as it crosses the launch position: a quick swell and
     // snap back, pivoting on its base so a grounded shape never lifts off the ground.
     if (reaction !== null) {
-      const punch = pop(reaction);
       const pivotY = grounded ? bottom : (bottom + top) / 2;
       g.save();
       g.translate(x, pivotY);
@@ -593,8 +665,8 @@ export class StageRenderer {
 
       // Dust and ripples stay unscaled, so they read as thrown off the obstacle rather
       // than as part of it.
-      if (grounded) dustPuff(g, x, bottom, reaction, alpha);
-      else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, alpha);
+      if (grounded) dustPuff(g, x, bottom, reaction, announced);
+      else ripple(g, x, (bottom + top) / 2, (bottom - top) / 2, reaction, announced);
     } else {
       drawShape(g, obstacle.type, x, bottom, top);
     }
@@ -914,23 +986,23 @@ function dustPuff(
   t: number,
   alpha: number,
 ): void {
-  const fade = (1 - t) * 0.7;
+  const fade = (1 - t) * 0.9;
   if (fade <= 0) return;
 
   const previousAlpha = g.globalAlpha;
   const previousFill = g.fillStyle;
   g.globalAlpha = alpha * fade;
-  g.fillStyle = LIGHT;
+  g.fillStyle = DUST;
 
   const out = ease(t);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 10; i++) {
     // Marks either side, thrown clear of the shape rather than piling up on it.
     const direction = i % 2 === 0 ? -1 : 1;
     const rank = i >> 1;
-    const spread = 11 + out * (22 + rank * 13);
+    const spread = 12 + out * (28 + rank * 15);
     // A shallow arc: out and up, then settling back towards the ground.
-    const lift = Math.sin(Math.PI * t) * (7 + rank * 6);
-    g.fillRect(Math.round(x + direction * spread - 2), Math.round(bottom - lift - 1), 5, 3);
+    const lift = Math.sin(Math.PI * t) * (8 + rank * 7);
+    g.fillRect(Math.round(x + direction * spread - 3), Math.round(bottom - lift - 1), 7, 3);
   }
 
   g.globalAlpha = previousAlpha;
@@ -952,19 +1024,22 @@ function ripple(
   t: number,
   alpha: number,
 ): void {
-  const fade = (1 - t) * 0.6;
+  const fade = (1 - t) * 0.85;
   if (fade <= 0) return;
 
   const previousAlpha = g.globalAlpha;
   const previousFill = g.fillStyle;
   g.globalAlpha = alpha * fade;
-  g.fillStyle = LIGHT;
+  g.fillStyle = DUST;
 
-  const out = radius + 4 + ease(t) * 16;
-  for (let i = 0; i < 4; i++) {
+  const out = radius + 5 + ease(t) * 24;
+  for (let i = 0; i < 6; i++) {
     const direction = i % 2 === 0 ? -1 : 1;
-    const tier = i < 2 ? -1 : 1;
-    g.fillRect(Math.round(x + direction * out - 2), Math.round(centreY + tier * 5), 5, 2);
+    const tier = i < 2 ? -1 : i < 4 ? 1 : 0;
+    // The trailing pair sits further out again, so the flick reads as a burst rather
+    // than as two marks that moved.
+    const reach = i < 4 ? out : out + 9;
+    g.fillRect(Math.round(x + direction * reach - 3), Math.round(centreY + tier * 6), 7, 2);
   }
 
   g.globalAlpha = previousAlpha;

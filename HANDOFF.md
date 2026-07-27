@@ -135,6 +135,12 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 - `ui/sequencer.ts` — plain DOM grid. Playhead is one element driven by a CSS var from
   stepFloat. **Nothing in the sequencer may change appearance on failure** (patch 1 C2)
   — no flash, no status change (FAILED renders as "editing"), no dimming.
+  - A locked row is **`display: none`**, not greyed: the kit arrives one instrument at a
+    time (kick / stage 4 openhat / 5 clap / 8 rim / 9 crash) and each row's arrival
+    animates its height open. `syncUnlocks` only ever adds, so a row that has appeared
+    stays for the rest of the chapter. The `.seq-row.locked` class is kept because the
+    e2e suites select on it. Anything that wants to click a locked cell has to go via
+    `state.toggle` — there is no element to force-click any more.
 - `ui/controls.ts` — run / clear / restart buttons, cached DOM writes, buttons blur
   after click (a focused button eats the next Space). Run button hides in free play.
   Restart is two-press and wipes the save.
@@ -153,11 +159,21 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   - Launch position (`DINO_FRACTION = 0.28`, moved from brief's 0.15) marked by a worn
     ground patch (non-scrolling terrain, not a hit line — hit lines are vetoed).
   - Obstacle announcements: derived from stepFloat (`reactionAt`, pure, tested), swell
-    is **anisotropic** `SWELL_X 0.75 / SWELL_Y 0.12` — vertical component sized so
-    swelled bands stay disjoint (`test/bands.test.ts` pins this). Dust for grounded
-    types, lateral flicks for flyers (rings looked like diagrams — rejected).
+    is **anisotropic** `SWELL_X 1.15 / SWELL_Y 0.13` — vertical component sized so
+    swelled bands stay disjoint (`test/bands.test.ts` pins this; the pillar/totem gap
+    caps SWELL_Y near 0.15, so push X, never Y). Dust for grounded types, lateral flicks
+    for flyers (rings looked like diagrams — rejected). `REACTION_SECONDS 0.22` is
+    **capped by `test/reaction.test.ts`**, which requires the window to be under two
+    steps (0.242s at 124 BPM) — emphasis has to be bought in amplitude, not duration.
+    `ANNOUNCE_ALPHA_LIFT` lifts a crossing obstacle out of its depth state towards
+    foreground ink and full opacity and straight back, so age never changes how loudly
+    something announces.
+  - The **quarter-note clouds announce too**, off the same `reactionAt`: swell, darken
+    towards INK, ride up. Sky has no bands to collide with, so that swell is uniform.
   - Current-stage obstacles wear a caret + bob (position, never size), tied to the
-    stage not a timer; receded obstacles at alpha 0.26 / lighter ink.
+    stage not a timer; receded obstacles at `RECEDED_ALPHA 0.58` / `RECEDED_INK
+    #7c7c7c`. That floor is high on purpose — receded obstacles are still live hazards
+    and eighteen of twenty-one are receded at stage 10.
   - `removedAt` on a `RenderObstacle` plays the rise animation backwards; free play sets
     it on every obstacle and the frame loop prunes them once gone.
   - Death camera: takes over `replay` (200ms of world time) **before** impact at the
@@ -208,6 +224,10 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   patch's "enters from off screen left at running speed" (user overrode).
 - Patch 1 C1 says the culprit gets "a highlight ring" — rejected as too on the nose,
   it is a pulsing red tint instead.
+- `GAME_DESIGN.md` §10 and the brief's §"Sequencer" both say rows "start greyed out and
+  inactive" and unlock in place. **Superseded**: a row that has not arrived is not in the
+  layout at all. User direction — five lanes of unanswerable questions on the opening
+  screen was the problem being solved, and greying them did not solve it.
 
 ## Things that bit us (avoid repeating)
 

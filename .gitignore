@@ -2,3 +2,6 @@ node_modules
 dist
 .wrangler
 .DS_Store
+
+# Screenshots the e2e suites drop in the working directory when no output dir is set.
+*.png

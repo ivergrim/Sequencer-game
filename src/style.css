@@ -9,7 +9,6 @@
   --ink-strong: #2f2f2f;
   --line: #bdbdbd;
   --line-soft: #e0e0e0;
-  --locked: #cfcfcf;
   --accent: #535353;
   --fail: #c1554b;
   --cell: 1.75rem;
@@ -228,44 +227,44 @@ body {
  * out which step it sits on is the puzzle.
  */
 
-/* A row is locked and greyed until a stage introduces an obstacle mapping to it. */
+/*
+ * A row does not exist until a stage introduces an obstacle that asks for it.
+ *
+ * The kit arrives one instrument at a time: stage 1 is a single kick lane and nothing
+ * else, and each new obstacle type brings its lane in with it. A greyed, hatched row was
+ * still a row — five lanes of unanswerable questions on the first screen — where an
+ * absent one asks nothing at all. Once a row has appeared it stays for the rest of the
+ * chapter, whatever the current stage introduced; `syncUnlocks` only ever adds.
+ */
 .seq-row.locked {
-  pointer-events: none;
+  display: none;
 }
 
-.seq-row.locked .seq-name {
-  color: var(--locked);
-}
-
-.seq-row.locked .seq-cell .pad {
-  border-color: transparent;
-}
-
-.seq-row.locked .seq-lane {
-  background: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 5px,
-    rgba(0, 0, 0, 0.028) 5px,
-    rgba(0, 0, 0, 0.028) 10px
-  );
-}
-
+/*
+ * The arrival. It opens out of nothing rather than fading in on the spot, because the
+ * row below it has to move down to make room and the eye should follow that rather than
+ * be surprised by it.
+ */
 .seq-row.unlocking {
-  animation: unlock 700ms ease-out;
+  overflow: hidden;
+  animation: unlock 620ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
 @keyframes unlock {
   0% {
-    opacity: 0.15;
-    transform: translateY(-6px);
+    height: 0;
+    opacity: 0;
   }
-  40% {
-    background: rgba(83, 83, 83, 0.1);
+  35% {
+    background: rgba(83, 83, 83, 0.12);
+  }
+  70% {
+    height: calc(var(--cell) + 1px);
+    opacity: 1;
   }
   100% {
+    height: calc(var(--cell) + 1px);
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

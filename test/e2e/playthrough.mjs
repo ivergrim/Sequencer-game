@@ -80,10 +80,18 @@ await installMonitor();
   check('stage 1 budget is 1', s.budget === 1);
   check('only the kick row is unlocked', s.unlocked.length === 1 && s.unlocked[0] === 'kick');
   check(
-    'the other four rows are locked and greyed',
+    'the other four rows are locked',
     s.locked.length === 4 && !s.locked.includes('kick'),
     s.locked.join(','),
   );
+  // An instrument arrives when the world first asks for it. Before that its row is not
+  // in the layout at all, so the opening screen is one lane and one question.
+  const laid = await page.evaluate(() =>
+    [...document.querySelectorAll('.seq-row')]
+      .filter((row) => row.getClientRects().length > 0)
+      .map((row) => row.dataset.instrument),
+  );
+  check('only the kick row is on screen', laid.length === 1 && laid[0] === 'kick', laid.join(','));
 }
 
 // ------------------------------------------------------- the budget blocks over-placing
@@ -109,9 +117,14 @@ await installMonitor();
 
 // -------------------------------------------------- a locked row cannot be played
 {
-  await page.click('.seq-row[data-instrument="crash"] .seq-cell[data-step="0"]', { force: true });
-  const s = await snapshot();
-  check('a locked row rejects clicks', s.used === 0);
+  // There is nothing to click any more — the row is not laid out — so the rejection is
+  // checked where it actually lives, on the state. A locked instrument stays unplayable
+  // however the toggle is reached.
+  const s = await page.evaluate(() => {
+    window.__debug.state.toggle('crash', 0);
+    return { used: window.__debug.state.used, crash0: window.__debug.state.pattern.crash[0] };
+  });
+  check('a locked row rejects notes', s.used === 0 && s.crash0 === false, JSON.stringify(s));
 }
 
 // ------------------------------------ the sequencer never changes for run state
