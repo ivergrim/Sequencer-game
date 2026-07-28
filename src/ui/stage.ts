@@ -851,7 +851,9 @@ export class StageRenderer {
     const groundY = GROUND_Y - (1 - near) * HORIZON_LIFT;
     const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, near);
     // Fade the last stretch out entirely, so it does not pop into or out of nothing.
-    const fade = clamp01(depth / 0.18);
+    // The idle character sits well below RECEDED_ALPHA so it reads as firmly behind the
+    // obstacle field even when an obstacle is itself receded and semi-transparent.
+    const fade = mode === 'idle' ? 0.35 : clamp01(depth / 0.18);
 
     // Any action still in flight settles out over the tumble instead of being cut, so a
     // character caught mid-air comes down rather than snapping to the ground. It also
