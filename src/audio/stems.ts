@@ -1,5 +1,5 @@
 import { getContext, getStemBus } from './context';
-import { Ab2, Ab4, Bb3, C4, C5, DB6, Db2, Db3, F1, F2, F3, F4, FM7, FM9 } from './key';
+import { Ab2, Ab4, Bb3, C3, C4, C5, DB6, Db2, F1, F2, F3, F4, FM7, FM9 } from './key';
 
 /**
  * Backing layers.
@@ -31,11 +31,14 @@ import { Ab2, Ab4, Bb3, C4, C5, DB6, Db2, Db3, F1, F2, F3, F4, FM7, FM9 } from '
  *    ear identifies as a hat, a clap or a cymbal, so the riser is a filter sweep on a
  *    sawtooth rather than the bandpassed noise it used to be.
  * 3. **A short, unpitched body.** Every layer holds long enough, and at a clear enough
- *    pitch, to read as a note. The shortest thing here is 260ms and it is a chord.
+ *    pitch, to read as a note. The shortest thing here is the 200ms bass note, which is
+ *    still nearly ten times the length of the rim's click.
  *
- * The layers that do pulse are also kept to the steps the player already owns by the
- * time they arrive — the quarter notes and the offbeat eighths — never the sixteenths
- * the chapter is still going to ask about.
+ * Placement carries the rest of the load. The only layers that pulse at all are the bass
+ * ones, and they sit on the offbeat eighths — never on a quarter note, where a low sound
+ * would be competing with the kick, and never on the sixteenths the rim is going to want.
+ * Register does the rest: the bass is an octave below anything the kit puts up there, and
+ * nothing else in the bed has an onset to confuse in the first place.
  */
 
 const SILENT = 0.0001;
@@ -155,24 +158,86 @@ function vowel(
 
 /**
  * The fallback bed: ten layers in the order the chapter introduces them, arranged as a
- * deep house track actually assembles — floor, warmth, harmonic motion, keys, voice,
- * groove, height, tension, melody, release.
+ * deep house track actually assembles — bass first and in three pieces, then warmth,
+ * keys, voice, height, tension, melody, release.
  *
- * The harmony is one bar of Fm7 into Dbmaj9, carried almost entirely by the bass moving
- * F → Db underneath a pad that never changes shape. See `key.ts` for why that voicing
- * works, and the file header for why nothing in here attacks fast enough to be a drum.
+ * The harmony is one bar of Fm7 into Dbmaj9, carried by the sub moving F → Db underneath
+ * a pad that never changes shape. See `key.ts` for why that voicing works, and the file
+ * header for why nothing in here attacks fast enough to be a drum.
  */
 const FALLBACKS: Record<string, BarScheduler> = {
-  // 1. The floor. A held sub on the root for the whole bar — no rhythm at all, so the
-  //    single kick the player places on stage 1 is unmistakably theirs.
-  sub: (bar, step, out) => {
-    tone(
-      { time: bar, freq: F1, duration: step * 16, gain: 0.34, attack: 0.3, release: 0.25 },
-      out,
-    );
+  /*
+   * 1-3 are one instrument arriving in three pieces: the bass, which is the first thing
+   * the player ever hears. It is deliberately the opening sound rather than a pad,
+   * because the game's first screen used to be effectively silent — the layer that
+   * opened it was a 43.65Hz drone, which most laptop and phone speakers do not
+   * reproduce at all.
+   *
+   * The whole line is the deep house offbeat "donk": a short, round note in the gaps
+   * between the kicks, so kick and bass answer each other. It is bouncy because the
+   * notes are short and land off the beat, not because they are loud.
+   *
+   *          0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+   * stage 1  .  .  F  .  .  .  .  .  .  .  F  .  .  .  .  .
+   * stage 2  .  .  .  .  .  .  Ab .  .  .  .  .  .  .  C  .
+   *
+   * Layers accumulate rather than replace, so the split has to be by step: stage 2 fills
+   * the offbeats stage 1 left alone and the two together are the full F–Ab–F–C line.
+   *
+   * Nothing here lands on 0, 4, 8 or 12. That is the point — a low sound on a quarter
+   * note is the one thing that could be mistaken for a kick, and these sit squarely in
+   * between, which is also why they only make full sense once the kicks arrive.
+   */
+
+  // 1. The seed. The root, twice a bar, off the beat.
+  bass: (bar, step, out) => {
+    for (const s of [2, 10]) {
+      tone(
+        { time: bar + s * step, freq: F2, duration: 0.2, gain: 0.3, type: 'triangle', cutoff: 520 },
+        out,
+      );
+    }
   },
 
-  // 2. Warmth. The Fm7 shape, held. Detuned for width, filtered dark so it stays under
+  // 2. The line. The other two offbeats, and the movement that makes it a line rather
+  //    than a pulse. C over the second half reads against Db as its major seventh.
+  bassline: (bar, step, out) => {
+    for (const [s, freq] of [
+      [6, Ab2],
+      [14, C3],
+    ] as Array<[number, number]>) {
+      tone(
+        { time: bar + s * step, freq, duration: 0.2, gain: 0.3, type: 'triangle', cutoff: 520 },
+        out,
+      );
+    }
+  },
+
+  // 3. The body, arriving with the last two kicks. A held sub underneath, F for the first
+  //    half of the bar and Db for the second — which is both the low end that makes the
+  //    bass feel full and the chord change everything above it is later voiced against.
+  sub: (bar, step, out) => {
+    const half = step * 8;
+    for (const [s, freq] of [
+      [0, F1],
+      [8, Db2],
+    ] as Array<[number, number]>) {
+      tone(
+        {
+          time: bar + s * step,
+          freq,
+          duration: half,
+          gain: 0.3,
+          type: 'sine',
+          attack: 0.09,
+          release: 0.1,
+        },
+        out,
+      );
+    }
+  },
+
+  // 4. Warmth. The Fm7 shape, held. Detuned for width, filtered dark so it stays under
   //    everything.
   pad: (bar, step, out) => {
     chord(
@@ -191,31 +256,7 @@ const FALLBACKS: Record<string, BarScheduler> = {
     );
   },
 
-  // 3. The chord change. Two half-bar bass notes, F then Db, which is what turns the
-  //    static pad above into a progression. Soft in, held, soft out.
-  bass: (bar, step, out) => {
-    const half = step * 8;
-    for (const [s, freq] of [
-      [0, F2],
-      [8, Db2],
-    ] as Array<[number, number]>) {
-      tone(
-        {
-          time: bar + s * step,
-          freq,
-          duration: half,
-          gain: 0.24,
-          type: 'triangle',
-          cutoff: 420,
-          attack: 0.04,
-          release: 0.09,
-        },
-        out,
-      );
-    }
-  },
-
-  // 4. Keys. A Rhodes-ish swell on each half of the bar, taking the two chord colours.
+  // 5. Keys. A Rhodes-ish swell on each half of the bar, taking the two chord colours.
   //    100ms in and a long tail — the shape of something struck softly and left to ring,
   //    which is as close to rhythmic as the backing gets this early.
   keys: (bar, step, out) => {
@@ -240,37 +281,9 @@ const FALLBACKS: Record<string, BarScheduler> = {
     }
   },
 
-  // 5. The voice. A held "ah" on the fifth and the root, swelling across the bar.
+  // 6. The voice. A held "ah" on the fifth and the root, swelling across the bar.
   voice: (bar, step, out) => {
     vowel([F3, C4], { time: bar, duration: step * 16, gain: 0.075 }, out);
-  },
-
-  // 6. The offbeat pulse — the deep house organ answer to the kick. It lands on 2, 6,
-  //    10 and 14, which the player has already filled with open hats by the time this
-  //    arrives, so it reinforces a part they own instead of hinting at one they do not.
-  //    Low, round and pitched: at 100–200Hz with a 30ms attack there is nothing about it
-  //    that could be heard as a hat.
-  pulse: (bar, step, out) => {
-    for (const [s, freq] of [
-      [2, Ab2],
-      [6, Ab2],
-      [10, Db3],
-      [14, Db3],
-    ] as Array<[number, number]>) {
-      tone(
-        {
-          time: bar + s * step,
-          freq,
-          duration: step * 1.7,
-          gain: 0.13,
-          type: 'triangle',
-          cutoff: 700,
-          attack: 0.03,
-          release: step * 0.9,
-        },
-        out,
-      );
-    }
   },
 
   // 7. Height. The same harmony an octave up, very slow in, barely there — it opens the

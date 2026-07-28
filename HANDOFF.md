@@ -296,9 +296,34 @@ Constraints that came with the request and should be treated as standing:
 - **Ten stages**, still.
 - **No drums in the background**, for the reason in the `stems.ts` note above.
 
-Stem names changed wholesale (`sub, pad, bass, keys, voice, pulse, strings, swell, lead,
-chords`) — if real loops are ever dropped into `public/stems/`, they must match these
-filenames. `PROTOTYPE_BRIEF.md`'s stage table is now historical; it was already stale.
+Stem names changed wholesale (`bass, bassline, sub, pad, keys, voice, strings, swell,
+lead, chords`) — if real loops are ever dropped into `public/stems/`, they must match
+these filenames. `PROTOTYPE_BRIEF.md`'s stage table is now historical; it was already
+stale.
+
+**The bass opens the track, in three pieces across the three kick stages**, on user
+direction after hearing the first version. Three things were wrong with that version and
+all three had the same fix:
+
+- The bed opened on a held 43.65Hz sub. Most laptop and phone speakers do not reproduce
+  that at all, so the first screen of the game was effectively silent — the user asked
+  for "some sound playing already right from the very beginning".
+- The bass was not the first instrument in, and they wanted it to be.
+- The replacement bassline (two half-bar sustained notes carrying the chord change) was
+  flatter than the original. Their words: the old one was "more bouncy and rhythmic and
+  arguably better". They were right — the old one was the deep house offbeat donk, short
+  notes in the gaps between the kicks, and bounce in this genre comes from being short
+  and off the beat.
+
+So the F–Ab–F–C offbeat line is restored verbatim from the pre-rebuild code, split by
+step across stages 1 and 2 (layers accumulate rather than replace, so it cannot be split
+by pitch), with the sustained sub moved to stage 3 where it reads as the bass filling out
+rather than as the opening. Nothing in the bass lands on 0, 4, 8 or 12: a low sound on a
+quarter note is the one thing that could be taken for a kick.
+
+The `pulse` layer was deleted in the same pass — it was a mid-range offbeat organ on 2,
+6, 10, 14, and once the bass owned those steps from stage 1 it was doubling a part that
+was already there. Ten layers still, because `bassline` replaced it.
 
 Knock-on changes worth knowing about:
 
@@ -393,13 +418,18 @@ All 110 unit tests green (80 before, plus the chapter and backing-bed additions)
 `test:e2e`, `test:e2e:patch1` and `test:e2e:responsive` green; build and typecheck clean.
 
 `main` is untouched. The current work is on `claude/chapter1-song-structure-dxtazt` and
-is meant to stay there for now — the chapter 1 rebuild described above. It is unheard by
-the user as of this writing: it is verified structurally (the pattern, the ramp, the
-no-drums rule, no clipping — the playthrough suite taps the buses and reports the mix
-peaking at 0.882) but nobody has actually listened to it yet, and "does it sound good"
-is the one thing none of that proves. Expect the next round to be tuning by ear:
-mix balance between the ten backing layers, the rim's placement on 13 and 15, and whether
-the crash arriving only at stage 10 is too late a reveal for the row.
+is meant to stay there for now — the chapter 1 rebuild described above.
+
+The user has heard the first version ("doesn't sound too bad") and the bass rework came
+out of that feedback; they have not yet heard the rework itself. Mix reference points
+from the playthrough suite: drum bus peaks 1.05, backing bed 0.37, full mix 0.92 after
+the limiter. At stage 1 the bed peaks at 0.147 with 51% of that surviving a 150Hz
+highpass, which is the rough floor of what a laptop speaker reproduces — the old opener
+was a pure 43.65Hz sine and had none.
+
+Still unproven by ear, and the likeliest next round: balance between the ten layers, the
+rim's placement on 13 and 15, and whether the crash arriving only at stage 10 is too late
+a reveal for the row.
 
 The last session tuned the idle dino that the session before it introduced. Changes:
 the idle character is now composited behind the entire scene using canvas

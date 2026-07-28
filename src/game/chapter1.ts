@@ -71,14 +71,14 @@ export const CHAPTER_1: Chapter = {
       id: 1,
       label: 'The downbeat',
       obstacles: [{ step: 0, type: 'pillar' }],
-      stem: 'sub',
+      stem: 'bass',
     },
     {
       // kick 8. The bar has a middle.
       id: 2,
       label: 'The half bar',
       obstacles: [{ step: 8, type: 'pillar' }],
-      stem: 'pad',
+      stem: 'bassline',
     },
     {
       // kick 4, 12. The floor is complete and the chapter has a pulse.
@@ -88,7 +88,7 @@ export const CHAPTER_1: Chapter = {
         { step: 4, type: 'pillar' },
         { step: 12, type: 'pillar' },
       ],
-      stem: 'bass',
+      stem: 'sub',
     },
     {
       // openhat 2, 10. The offbeat arrives half-strength — the "and" of beats 1 and 3.
@@ -99,7 +99,7 @@ export const CHAPTER_1: Chapter = {
         { step: 2, type: 'bird' },
         { step: 10, type: 'bird' },
       ],
-      stem: 'keys',
+      stem: 'pad',
     },
     {
       // openhat 6, 14. Every offbeat now carries a hat. This is the moment the loop
@@ -110,7 +110,7 @@ export const CHAPTER_1: Chapter = {
         { step: 6, type: 'bird' },
         { step: 14, type: 'bird' },
       ],
-      stem: 'voice',
+      stem: 'keys',
     },
     {
       // clap 4, 12. The backbeat, whole. Half of it would just sound wrong.
@@ -120,7 +120,7 @@ export const CHAPTER_1: Chapter = {
         { step: 4, type: 'enemy' },
         { step: 12, type: 'enemy' },
       ],
-      stem: 'pulse',
+      stem: 'voice',
     },
     {
       // rim 15. A single tick on the last sixteenth, pulling the loop back round to the

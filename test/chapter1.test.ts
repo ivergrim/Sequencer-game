@@ -81,17 +81,25 @@ describe('chapter 1 data', () => {
   it('has ten stages, each adding a stem', () => {
     expect(stages).toHaveLength(10);
     expect(activeStems(CHAPTER_1, 9)).toEqual([
+      'bass',
+      'bassline',
       'sub',
       'pad',
-      'bass',
       'keys',
       'voice',
-      'pulse',
       'strings',
       'swell',
       'lead',
       'chords',
     ]);
+  });
+
+  it('opens on the bass, and builds it across the three kick stages', () => {
+    // The first thing a player hears has to be audible and has to have a pulse. The bed
+    // used to open on a 43.65Hz drone, which most laptop and phone speakers do not
+    // reproduce at all, so the first screen was effectively silent.
+    const [first, second, third] = activeStems(CHAPTER_1, 2);
+    expect([first, second, third]).toEqual(['bass', 'bassline', 'sub']);
   });
 
   it('brings the kit in one instrument at a time, in the order the music needs it', () => {

@@ -95,6 +95,17 @@ const STEP = 60 / CHAPTER_1.bpm / 4; // 124 BPM in sixteenths — 121ms.
 const NAMES = activeStems(CHAPTER_1, CHAPTER_1.stages.length - 1);
 
 /**
+ * The floor `tone` enforces, less a hair for floating point.
+ *
+ * A layer whose attack is exactly `MIN_ATTACK` schedules its ramp at `bar + s * step +
+ * 0.025`, and subtracting the start back off that does not land on 0.025 exactly — the
+ * bass comes out at 0.02499999999999991. The tolerance is a rounding allowance and
+ * nothing more; a millisecond either way is inaudible, and every real violation this
+ * catches is off by a factor of five or more.
+ */
+const FLOOR = 0.025 - 1e-9;
+
+/**
  * The fastest rise in one layer's bar, in seconds.
  *
  * Walks each gain's automation looking for a rise from at or below a tenth of a target
@@ -140,9 +151,9 @@ describe('the backing bed', () => {
   it.each(NAMES)('gives %s no attack a drum could have', (name) => {
     const fastest = fastestAttack(scheduleOne(name));
     expect(fastest).toBeGreaterThan(0);
-    // 25ms is the floor `tone` enforces. A kick reaches full level in under 1ms and the
-    // rim's click is 20ms end to end, so anything under this line is in drum territory.
-    expect(fastest).toBeGreaterThanOrEqual(0.025);
+    // A kick reaches full level in under 1ms and the rim's click is 20ms end to end, so
+    // anything under this line is in drum territory.
+    expect(fastest).toBeGreaterThanOrEqual(FLOOR);
   });
 
   it.each(NAMES)('builds %s without a single noise source', (name) => {
@@ -158,7 +169,7 @@ describe('the backing bed', () => {
     gainAutomations.length = 0;
     stems.scheduleBar(NAMES, STEP * 16);
 
-    expect(fastestAttack(gainAutomations)).toBeGreaterThanOrEqual(0.025);
+    expect(fastestAttack(gainAutomations)).toBeGreaterThanOrEqual(FLOOR);
     expect(bufferSources).toBe(0);
   });
 
@@ -166,7 +177,7 @@ describe('the backing bed', () => {
     // A stem name with no scheduler falls back to a generic one rather than to silence,
     // and that fallback is bound by the same two rules as the named layers.
     const fastest = fastestAttack(scheduleOne('a-name-nothing-defines'));
-    expect(fastest).toBeGreaterThanOrEqual(0.025);
+    expect(fastest).toBeGreaterThanOrEqual(FLOOR);
     expect(bufferSources).toBe(0);
   });
 });

@@ -182,18 +182,37 @@ two open hats ever land in consecutive steps, and that no stage adds more than t
 
 ### The bed under it
 
-One bar of Fm7 into Dbmaj9, carried almost entirely by the bass moving F to Db underneath
-a pad that never changes shape — `[F3, Ab3, C4, Eb4]` is Fm7 over an F and Dbmaj9 over a
-Db, so the harmony moves without anything being struck. Ten layers arrive in the order a
-track builds: floor, warmth, harmonic motion, keys, voice, groove, height, tension,
-melody, release. The only one that pulses lands on the offbeat eighths, which the player
-already owns by the time it arrives.
+**The bass opens the track, and it arrives in three pieces.** The bed used to open on a
+held 43.65Hz sub, which most laptop and phone speakers do not reproduce at all — so the
+first screen of the game was, in practice, silent. It now opens on the deep house offbeat
+"donk": a short, round bass note in the gaps between the kicks.
+
+```
+         0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+stage 1  .  .  F  .  .  .  .  .  .  .  F  .  .  .  .  .
+stage 2  .  .  .  .  .  .  Ab .  .  .  .  .  .  .  C  .
+stage 3  ═══ F1 held ═════════════════ Db2 held ═══════
+```
+
+Stage 1 is the root twice a bar — minimal, and it only makes full sense once the kicks
+land around it. Stage 2 fills the other two offbeats and turns the pulse into the
+F–Ab–F–C line. Stage 3 puts the sub underneath, which is both the low end that makes the
+bass feel full and the F → Db chord change everything above it is later voiced against.
+Layers accumulate rather than replace, so the split has to be by step, not by pitch.
+
+None of it touches 0, 4, 8 or 12. A low sound on a quarter note is the one thing that
+could be taken for a kick; these sit squarely in between.
+
+Above that, one bar of Fm7 into Dbmaj9 over a pad that never changes shape —
+`[F3, Ab3, C4, Eb4]` is Fm7 over an F and Dbmaj9 over a Db, so the harmony moves without
+anything being struck. The remaining seven layers arrive in the order a track builds:
+warmth, keys, voice, height, tension, melody, release.
 
 ### Dropping in real loops
 
 Chapter 1 expects these ten stems, in the order they enter:
 
-`sub`, `pad`, `bass`, `keys`, `voice`, `pulse`, `strings`, `swell`, `lead`, `chords`
+`bass`, `bassline`, `sub`, `pad`, `keys`, `voice`, `strings`, `swell`, `lead`, `chords`
 
 **No stem may contain drums.** Not a mixing preference — the player identifies drums by
 ear, so a backing layer that reads as percussion is a false answer: they hear a tick on
