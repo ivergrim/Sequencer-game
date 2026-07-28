@@ -205,7 +205,7 @@ async function auditCommittedNotes() {
     window.__debug.state.pattern.kick[8] = false;
   });
   const removed = await snapshot();
-  check('the pattern can still be broken from outside the UI', removed.used === 20, `${removed.used}`);
+  check('the pattern can still be broken from outside the UI', removed.used === 15, `${removed.used}`);
 
   await runAndSettle(page);
   const failed = await snapshot();
@@ -273,8 +273,8 @@ for (let stage = 1; stage <= 10; stage++) {
 }
 
 check(
-  'budgets follow the brief 1,2,4,8,10,14,15,17,18,21',
-  JSON.stringify(seen.map((s) => s.budget)) === JSON.stringify([1, 2, 4, 8, 10, 14, 15, 17, 18, 21]),
+  'budgets ramp 1,2,4,6,8,10,11,12,14,16',
+  JSON.stringify(seen.map((s) => s.budget)) === JSON.stringify([1, 2, 4, 6, 8, 10, 11, 12, 14, 16]),
   seen.map((s) => s.budget).join(','),
 );
 
@@ -312,27 +312,27 @@ check(
 
   check('the world empties of obstacles', free.obstaclesOnStage === 0, `${free.obstaclesOnStage} left`);
   check(
-    'the chapter data still holds all twenty-one',
-    free.obstaclesInData === 21,
+    'the chapter data still holds all sixteen',
+    free.obstaclesInData === 16,
     `${free.obstaclesInData}`,
   );
   check('nothing is locked any more', free.anyLocked === false);
   check('and no cell still renders as committed', free.committedClass === false);
   check('every row is playable', free.unlockedRows === 5 && free.lockedRows === 0);
-  check('the finished track survives the unlock', free.used === 21, `${free.used} notes`);
+  check('the finished track survives the unlock', free.used === 16, `${free.used} notes`);
   check('the status reads free play', free.status === 'free play', `"${free.status}"`);
-  check('the budget readout becomes a note count', free.budgetText === '21 notes', free.budgetText);
+  check('the budget readout becomes a note count', free.budgetText === '16 notes', free.budgetText);
   check('the run button is gone', free.runHidden === true);
 
   // The budget is lifted: a note nothing ever required can now be placed.
   await page.click('.seq-row[data-instrument="crash"] .seq-cell[data-step="9"]');
   const added = await page.evaluate(() => window.__debug.state.used);
-  check('notes can be placed past the old budget', added === 22, `${added}`);
+  check('notes can be placed past the old budget', added === 17, `${added}`);
 
   // And a formerly committed note can be taken out again.
   await page.click('.seq-row[data-instrument="kick"] .seq-cell[data-step="8"]');
   const removed = await page.evaluate(() => window.__debug.state.used);
-  check('a formerly committed note can be removed', removed === 21, `${removed}`);
+  check('a formerly committed note can be removed', removed === 16, `${removed}`);
 
   // Runs are retired: there is nothing to run against.
   await page.keyboard.press('Space');

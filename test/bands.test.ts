@@ -53,8 +53,13 @@ describe('obstacle bands', () => {
         expect(spans[i]!.bottom).toBeGreaterThan(spans[i - 1]!.top);
       }
     }
-    // Steps 4, 6, 12, 14 and 15 stack in chapter 1.
-    expect(stacked).toBe(5);
+    // Steps 4 and 12 stack in chapter 1 — pillar under enemy, on both backbeats. Step 0
+    // carries a pillar and the wall, but the wall spans the full height behind
+    // everything and so is exempt by construction. The rebuilt chapter stacks far less
+    // than the old one did (which stacked on five steps, three deep in places); this
+    // still has to hold, because the moment it stops holding is the moment a swelled
+    // obstacle eats its neighbour.
+    expect(stacked).toBe(2);
   });
 
   it('puts almost all of the punch sideways', () => {

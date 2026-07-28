@@ -140,22 +140,25 @@ await solveCurrentStage(page);
     };
   });
 
-  check('stage 10 has all twenty-one obstacles', depth.total === 21, `${depth.total}`);
+  check('stage 10 has all sixteen obstacles', depth.total === 16, `${depth.total}`);
   check(
-    'exactly three render at full opacity, eighteen receded',
-    depth.foreground === 3 && depth.total - depth.foreground === 18,
+    'exactly two render at full opacity, fourteen receded',
+    depth.foreground === 2 && depth.total - depth.foreground === 14,
     `${depth.foreground} foreground, ${depth.total - depth.foreground} receded`,
   );
 }
 
-// --------------------------------- 9. the three obstacles on step 12 do not occlude
+// --------------------------------- 9. the stacked obstacles on step 12 do not occlude
 {
   const bands = await page.evaluate(() => {
     const obstacles = window.__debug.renderObstacles.filter((o) => o.step === 12);
     return { types: obstacles.map((o) => o.type), bands: window.__debug.bands };
   });
 
-  check('step 12 carries three obstacles', bands.types.length === 3, bands.types.join(','));
+  // The rebuilt chapter stacks two deep at most, and only on the two backbeats — the old
+  // one went three deep here. Fewer things to keep apart, but the property is the same
+  // one and it still has to hold.
+  check('step 12 carries two stacked obstacles', bands.types.length === 2, bands.types.join(','));
 
   const spans = bands.types.map((t) => bands.bands[t]).sort((a, b) => a.bottom - b.bottom);
   let disjoint = true;
@@ -171,7 +174,16 @@ await solveCurrentStage(page);
 
 // ---------------------------------------- 6 & 7. failure feedback is stage-only
 {
-  // Fail on a small type introduced four stages earlier: the stage 6 open hat on step 3.
+  // Fail on a small type introduced six stages earlier: the stage 4 open hat on step 2.
+  //
+  // Let the row-arrival animation finish first. The crash row now arrives with stage 10
+  // itself rather than stage 9, so it can still be mid-animation here — and this section
+  // compares the sequencer's markup before and after a failure, which an unrelated
+  // 620ms animation ending in between would fail for the wrong reason.
+  await page.waitForFunction(() => document.querySelectorAll('.seq-row.unlocking').length === 0, null, {
+    timeout: 5_000,
+  });
+
   const before = await page.evaluate(() => {
     const cells = [...document.querySelectorAll('.seq-cell')];
     return {
@@ -185,7 +197,7 @@ await solveCurrentStage(page);
   // Committed notes are frozen now, so a small, old obstacle can no longer be orphaned
   // through the UI. The renderer still has to identify one, so force it directly.
   await page.evaluate(() => {
-    window.__debug.state.pattern.openhat[3] = false;
+    window.__debug.state.pattern.openhat[2] = false;
   });
   await page.mouse.move(5, 5); // keep hover styling out of the comparison
   await page.keyboard.press('Space');
@@ -251,7 +263,7 @@ await solveCurrentStage(page);
   const failed = await snap();
   check(
     'the run failed on the old, small open hat',
-    failed.failure?.step === 3 && failed.failure?.missing === 'openhat',
+    failed.failure?.step === 2 && failed.failure?.missing === 'openhat',
     JSON.stringify(failed.failure),
   );
   check('no sequencer cell changes class on failure', before.classes === during.classes);
@@ -290,7 +302,7 @@ await solveCurrentStage(page);
   // Put back the committed note that was broken from outside the UI: it is locked, so
   // the grid cannot restore it, by design.
   await page.evaluate(() => {
-    window.__debug.state.pattern.openhat[3] = true;
+    window.__debug.state.pattern.openhat[2] = true;
   });
 
   // Stage 10 is still unsolved after the forced failure above. Clear it for real.

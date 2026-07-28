@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAPTER_1 } from '../src/game/chapter1';
+import { CHAPTER_1, noteBudget } from '../src/game/chapter1';
 import type { StateEvents } from '../src/game/state';
 import {
   DEATH_CAMERA,
@@ -230,8 +230,9 @@ describe('free play after chapter completion', () => {
         expect(state.isLocked(row, step)).toBe(false);
       }
     }
-    // The full track survives the unlock.
-    expect(state.used).toBe(21);
+    // The full track survives the unlock. Derived from the chapter rather than pinned
+    // to a number, so it keeps meaning "all of it" when the chapter is retuned.
+    expect(state.used).toBe(noteBudget(CHAPTER_1, CHAPTER_1.stages.length - 1));
   });
 
   it('lifts the budget', () => {

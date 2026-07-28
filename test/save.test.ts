@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAPTER_1 } from '../src/game/chapter1';
+import { CHAPTER_1, noteBudget } from '../src/game/chapter1';
 import { parseSave } from '../src/game/save';
 import { clearStage, make } from './helpers';
 
@@ -39,7 +39,9 @@ describe('save round-trip', () => {
     revived.restore(parsed!);
 
     expect(revived.complete).toBe(true);
-    expect(revived.used).toBe(21);
+    // The whole finished track, however many notes that is — derived, so retuning the
+    // chapter cannot silently make this assert something smaller than the truth.
+    expect(revived.used).toBe(noteBudget(CHAPTER_1, CHAPTER_1.stages.length - 1));
     expect(revived.unlockedRows.size).toBe(CHAPTER_1.rows.length);
     for (const row of CHAPTER_1.rows) {
       for (let step = 0; step < CHAPTER_1.patternLength; step++) {
