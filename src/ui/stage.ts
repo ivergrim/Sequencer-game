@@ -192,7 +192,7 @@ const CLOUD_INK = 0.5;
  * the scale depth so the walk stays smooth.
  */
 const IDLE_DEPTH = 0.55;
-const IDLE_Y_DEPTH = 0.25;
+const IDLE_Y_DEPTH = 0.12;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
