@@ -235,13 +235,20 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
       it truncates it (and `test:e2e:patch1` stops seeing an arrival at all, since it only
       samples while ARMED). `test/state.test.ts` pins both ends.
     - After the first run resolves, the character **never disappears**. It walks back to
-      an idle position at `IDLE_DEPTH 0.55` — smaller, grey, lifted, drawn behind obstacles —
-      and stays there performing the live pattern. The next count-in brings it forward from
-      the idle position instead of from the deep horizon. The very first entry (start of
-      chapter) still uses the full deep approach; `hasRunOnce` in `state.ts` tracks the
-      distinction and `fromIdle` in `StageFrame` tells the renderer which depth range to
-      use. The exit animation after a success also stops at `IDLE_DEPTH` instead of going
-      all the way to zero.
+      an idle position at `IDLE_DEPTH 0.55` — smaller, grey, drawn behind obstacles — and
+      stays there performing the live pattern. `IDLE_LIFT 65` raises it well above the
+      depth-based `HORIZON_LIFT` so it sits roughly halfway between the cloud line and the
+      ground; the depth formula alone (58 px range) could never reach that high, which is
+      why a separate additive lift exists. Scale, ink, and action damping still come from
+      `IDLE_DEPTH`; only the vertical position uses the extra lift. The idle character is
+      composited behind the entire scene using `destination-over` so that even
+      semi-transparent receded obstacles fully occlude it — no bleed-through.
+      The next count-in brings it forward from the idle position (no lateral offset —
+      both idle and running are at `dinoX`); the deep-horizon entry with its
+      `HORIZON_OFFSET` lateral shift is reserved for the very first run. `hasRunOnce` in
+      `state.ts` tracks the distinction and `fromIdle` in `StageFrame` tells the renderer
+      which path to use. The exit animation after a success also stops at `IDLE_DEPTH`
+      (with `IDLE_LIFT`) instead of going all the way to zero.
 - `game/actions.ts` — impact-ratio timing (`animationStart = stepTime − duration·impact`;
   audio always fires exactly on the step — animation and audio are decoupled, animations
   are scheduled by the frame loop because leads exceed the audio lookahead). Durations
@@ -324,13 +331,23 @@ All 80 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` an
 5-minute `test:e2e:drift` all green; build and typecheck clean. Everything is on `main`,
 which is the only branch the repo has now.
 
-The last session added the idle dino: after any run, the character stays visible in the
-background at reduced depth (`IDLE_DEPTH 0.55`), performing the live pattern while the
-player edits. Re-entries walk from the idle position to the launch position over the
-full count-in. The very first entry still uses the deep-horizon approach.
+The last session tuned the idle dino that the session before it introduced. Changes:
+the idle character is now composited behind the entire scene using canvas
+`destination-over` (previously it bled through semi-transparent receded obstacles); an
+`IDLE_LIFT` of 65 px positions it roughly halfway between the cloud line and the ground
+(the depth-based `HORIZON_LIFT` range is only 58 px, far too small); entering from idle
+no longer applies the `HORIZON_OFFSET` lateral shift (both idle and running sit at
+`dinoX`, so the old code caused a visible teleport to the left at the start of the
+walk-in); and `IDLE_DEPTH` was raised from 0.28 to 0.55 so the character reads as
+present rather than a speck.
 
-The session before it was a presentation batch: receded obstacles brought back up out of
-the paper, the crossing announcement made much louder (amplitude only — duration and the
+The session before that added the idle dino itself: after any run, the character stays
+visible in the background at reduced depth, performing the live pattern while the player
+edits. Re-entries walk from the idle position to the launch position over the full
+count-in. The very first entry still uses the deep-horizon approach.
+
+Two sessions ago was a presentation batch: receded obstacles brought back up out of the
+paper, the crossing announcement made much louder (amplitude only — duration and the
 vertical swell are both pinned by tests), the quarter-note clouds announcing along with
 it, sequencer rows arriving one instrument at a time instead of sitting greyed, the key
 hints folded into the buttons that perform them, and run promoted to a banner above the
@@ -339,6 +356,15 @@ stage that withdraws while a run is under way.
 Open items the user has deferred rather than declined:
 
 - Beat labels above the sequencer — **declined**, do not revisit.
+
+**Deployment note:** `dist/` is gitignored — pushing source changes to `main` does
+**not** update what the user sees. The site is deployed via Cloudflare Workers
+(`npm run deploy`, which runs `npm run build && wrangler deploy`). After pushing source
+changes, **you must tell the user to deploy** (or deploy yourself if credentials are
+available). To verify changes visually before the user sees them, run the Vite dev
+server (`npx vite --port 5199`) and point e2e screenshots or manual checks at it — that
+serves the live source, not the stale `dist/`. Several rounds of changes in this session
+appeared invisible to the user because only `main` was updated without a deploy.
 
 Known accepted limitations: background-tab stem gaps; stems directory empty pending real
 loops (drop-in, constraints in README). `ui/stage.ts` is still ~1100 lines and would

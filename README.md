@@ -427,12 +427,14 @@ BPM lasts 121ms and a subtle move simply is not seen.
 The first entry comes out of the deep horizon — small, grey and lifted towards the
 vanishing point, behind the obstacle layer, resolving to full size and full ink as it
 reaches the launch position. After that first run resolves, the character never vanishes:
-it walks back to an idle position at about 55% depth (`IDLE_DEPTH`) and stays there
-performing the live pattern, drawn behind the obstacle field. The next count-in brings it
-forward from the idle position rather than from the deep horizon, so the return is a
-shorter, more grounded walk. The lateral travel is deliberately tiny either way, because
-any long slide along the ground reads as running past obstacles; apparent size does the
-work, on a curve that accelerates as it arrives the way perspective does.
+it walks back to an idle position at about 55% depth (`IDLE_DEPTH`) with an extra
+`IDLE_LIFT` that raises it roughly halfway between the cloud line and the ground. It
+stays there performing the live pattern, composited behind the entire scene using canvas
+`destination-over` so even semi-transparent obstacles fully occlude it. The next count-in
+brings it forward from the idle position rather than from the deep horizon, with no
+lateral offset (both idle and running sit at `dinoX`). The lateral `HORIZON_OFFSET` shift
+only applies to the very first deep-horizon entry. Apparent size does the work, on a
+curve that accelerates as it arrives the way perspective does.
 
 **The walk in lasts the whole count-in.** It used to take a third of the bar, which left
 the character standing at the launch position for two and a half beats before the run

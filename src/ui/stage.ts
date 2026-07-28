@@ -191,7 +191,7 @@ const CLOUD_INK = 0.5;
  * entry animations interpolate the lift so the walk stays smooth.
  */
 const IDLE_DEPTH = 0.55;
-const IDLE_LIFT = 80;
+const IDLE_LIFT = 65;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
