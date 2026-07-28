@@ -185,12 +185,12 @@ const CLOUD_INK = 0.5;
  * background and stays there performing the live pattern at reduced depth, the same way
  * any distant object is drawn. The next count-in brings it forward again.
  *
- * 0.45 puts it at roughly a third of full scale, greyed towards LIGHT, and lifted
- * about 35 logical units above the ground line — clearly present but clearly behind the
+ * 0.55 puts it at roughly 40% of full scale, greyed towards LIGHT, and lifted about
+ * 30 logical units above the ground line — clearly present but clearly behind the
  * obstacle field. Adjust the constant and everything else (scale, ink, lift, draw order)
  * follows.
  */
-const IDLE_DEPTH = 0.45;
+const IDLE_DEPTH = 0.55;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
@@ -811,10 +811,11 @@ export class StageRenderer {
     } else if (mode === 'entering') {
       if (frame.fromIdle) {
         depth = IDLE_DEPTH + (1 - IDLE_DEPTH) * frame.character.progress;
+        x = dinoX;
       } else {
         depth = frame.character.progress;
+        x = dinoX - HORIZON_OFFSET * w * (1 - depth);
       }
-      x = dinoX - HORIZON_OFFSET * w * (1 - depth);
     } else if (mode === 'exiting') {
       depth = 1 - (1 - IDLE_DEPTH) * frame.character.progress;
       x = dinoX;

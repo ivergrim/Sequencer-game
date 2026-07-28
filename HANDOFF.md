@@ -235,7 +235,7 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
       it truncates it (and `test:e2e:patch1` stops seeing an arrival at all, since it only
       samples while ARMED). `test/state.test.ts` pins both ends.
     - After the first run resolves, the character **never disappears**. It walks back to
-      an idle position at `IDLE_DEPTH 0.45` — smaller, grey, lifted, drawn behind obstacles —
+      an idle position at `IDLE_DEPTH 0.55` — smaller, grey, lifted, drawn behind obstacles —
       and stays there performing the live pattern. The next count-in brings it forward from
       the idle position instead of from the deep horizon. The very first entry (start of
       chapter) still uses the full deep approach; `hasRunOnce` in `state.ts` tracks the
@@ -325,7 +325,7 @@ All 80 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` an
 which is the only branch the repo has now.
 
 The last session added the idle dino: after any run, the character stays visible in the
-background at reduced depth (`IDLE_DEPTH 0.45`), performing the live pattern while the
+background at reduced depth (`IDLE_DEPTH 0.55`), performing the live pattern while the
 player edits. Re-entries walk from the idle position to the launch position over the
 full count-in. The very first entry still uses the deep-horizon approach.
 
