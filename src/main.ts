@@ -271,6 +271,7 @@ async function start(): Promise<void> {
       countInBeat: state.countInBeat,
       currentStage: state.complete ? null : state.stageIndex,
       hint: state.hintActive,
+      fromIdle: state.hasRunOnce,
     });
 
     requestAnimationFrame(frame);

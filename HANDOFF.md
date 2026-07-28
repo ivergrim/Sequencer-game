@@ -234,6 +234,14 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
       RUNNING, whose pose is `progress: 1`, so a shorter lead does not delay the arrival,
       it truncates it (and `test:e2e:patch1` stops seeing an arrival at all, since it only
       samples while ARMED). `test/state.test.ts` pins both ends.
+    - After the first run resolves, the character **never disappears**. It walks back to
+      an idle position at `IDLE_DEPTH 0.28` — small, grey, lifted, drawn behind obstacles —
+      and stays there performing the live pattern. The next count-in brings it forward from
+      the idle position instead of from the deep horizon. The very first entry (start of
+      chapter) still uses the full deep approach; `hasRunOnce` in `state.ts` tracks the
+      distinction and `fromIdle` in `StageFrame` tells the renderer which depth range to
+      use. The exit animation after a success also stops at `IDLE_DEPTH` instead of going
+      all the way to zero.
 - `game/actions.ts` — impact-ratio timing (`animationStart = stepTime − duration·impact`;
   audio always fires exactly on the step — animation and audio are decoupled, animations
   are scheduled by the frame loop because leads exceed the audio lookahead). Durations
@@ -259,8 +267,9 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   against the full obstacle set) was replaced on user instruction: the world empties,
   the kit unlocks, the budget lifts. `GAME_DESIGN.md` §13's free-play mode, arrived at
   early.
-- Character absent during EDITING (patch 1 B1) **except** after chapter completion,
-  where it stays performing the finished track permanently.
+- Character **hidden before the first run only** (patch 1 B1 superseded). After any run
+  resolves it idles in the background at reduced depth, performing the live pattern.
+  After chapter completion it stays performing at full size permanently.
 - Character size, jump height etc. re-tuned smaller; pillar band grown to 52 for ratio.
 - Entry is "out of the screen" depth illusion per explicit user direction, not the
   patch's "enters from off screen left at running speed" (user overrode). It also lasts
@@ -315,21 +324,20 @@ All 80 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` an
 5-minute `test:e2e:drift` all green; build and typecheck clean. Everything is on `main`,
 which is the only branch the repo has now.
 
-The last session was a presentation batch: receded obstacles brought back up out of the
-paper, the crossing announcement made much louder (amplitude only — duration and the
+The last session added the idle dino: after any run, the character stays visible in the
+background at reduced depth (`IDLE_DEPTH 0.28`), performing the live pattern while the
+player edits. Re-entries walk from the idle position to the launch position over the
+full count-in. The very first entry still uses the deep-horizon approach.
+
+The session before it was a presentation batch: receded obstacles brought back up out of
+the paper, the crossing announcement made much louder (amplitude only — duration and the
 vertical swell are both pinned by tests), the quarter-note clouds announcing along with
 it, sequencer rows arriving one instrument at a time instead of sitting greyed, the key
 hints folded into the buttons that perform them, and run promoted to a banner above the
 stage that withdraws while a run is under way.
 
-The session before it worked through a full review batch: the run-decision snapshot,
-audio cues + note audition, free play, the stuck-player hint, persistence + restart,
-audio resume + DPR handling, touch controls + responsive layout, and CI + housekeeping.
-
 Open items the user has deferred rather than declined:
 
-- **MIDI export** of the finished pattern (`GAME_DESIGN.md` §13) — user said "maybe for
-  later". ~80 lines, no dependencies, would give free play a payoff.
 - Beat labels above the sequencer — **declined**, do not revisit.
 
 Known accepted limitations: background-tab stem gaps; stems directory empty pending real

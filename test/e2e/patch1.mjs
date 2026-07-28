@@ -31,7 +31,7 @@ const snap = () =>
     await page.waitForTimeout(90);
   }
   check(
-    'the character is never drawn during EDITING',
+    'the character is hidden before the first run',
     samples.every((s) => s.phase === 'editing' && s.characterDrawn === false),
     `${samples.filter((s) => s.characterDrawn).length} of ${samples.length} frames drew it`,
   );
@@ -278,7 +278,11 @@ await solveCurrentStage(page);
   });
   const after = await snap();
   check('the death camera releases to EDITING', after.phase === 'editing');
-  check('the character is hidden again afterwards', after.characterDrawn === false);
+  check(
+    'the character idles in the background afterwards',
+    after.characterDrawn === true && after.character.mode === 'idle',
+    `${after.character.mode}, drawn ${after.characterDrawn}`,
+  );
 }
 
 // -------------------------- the finished chapter keeps the character on stage

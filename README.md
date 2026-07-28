@@ -77,9 +77,10 @@ derived `stepFloat` sits from the step each hit was scheduled to sound on. That 
 is the alignment error, since the obstacles and the playhead both derive from `stepFloat`.
 It compares the first thirty seconds against the last.
 
-`test:e2e:patch1` covers the criteria added by the patch: that the character is absent
-during EDITING, that it is in position before step 0, that the pose channel is at its
-maximum on the frame an obstacle reaches `DINO_X`, that stage 10 renders exactly three
+`test:e2e:patch1` covers the criteria added by the patch: that the character is hidden
+before the first run and idles in the background after, that it is in position before
+step 0, that the pose channel is at its maximum on the frame an obstacle reaches
+`DINO_X`, that stage 10 renders exactly three
 obstacles in the foreground, that the bands on step 12 do not overlap, and that no element
 of the sequencer changes appearance when a run fails.
 
@@ -423,11 +424,14 @@ They layer by taking the max of each channel, so a crash and a kick on one step 
 dash-leap. Every deformation is exaggerated well past realism, because a sixteenth at 124
 BPM lasts 121ms and a subtle move simply is not seen.
 
-The character exists only for the run, and enters and leaves along the depth axis rather
-than across the ground — small, grey and lifted towards the vanishing point, behind the
-obstacle layer, resolving to full size and full ink as it reaches the launch position. The
-lateral travel is deliberately tiny, because any long slide along the ground reads as
-running past the obstacles whichever layer it is drawn on; the apparent size does the
+The first entry comes out of the deep horizon — small, grey and lifted towards the
+vanishing point, behind the obstacle layer, resolving to full size and full ink as it
+reaches the launch position. After that first run resolves, the character never vanishes:
+it walks back to an idle position at about 28% depth (`IDLE_DEPTH`) and stays there
+performing the live pattern, drawn behind the obstacle field. The next count-in brings it
+forward from the idle position rather than from the deep horizon, so the return is a
+shorter, more grounded walk. The lateral travel is deliberately tiny either way, because
+any long slide along the ground reads as running past obstacles; apparent size does the
 work, on a curve that accelerates as it arrives the way perspective does.
 
 **The walk in lasts the whole count-in.** It used to take a third of the bar, which left
@@ -435,9 +439,10 @@ the character standing at the launch position for two and a half beats before th
 began — and the world does not stop for the count, so every obstacle that crossed in that
 window went straight through a character that was not yet running the bar and answered
 none of them. Out in the distance it is drawn behind the obstacle field and nothing
-touches it, so the fix is to still be arriving until the count is over: it starts at a
-twentieth of full size, up at the vanishing point, and reaches the launch position as the
-last beat of the count-in finishes.
+touches it, so the fix is to still be arriving until the count is over: the first entry
+starts at a twentieth of full size up at the vanishing point; subsequent entries start from
+the idle position at 28% size. Both reach the launch position as the last beat of the
+count-in finishes.
 
 It cannot arrive exactly on the downbeat, because two things reach back from it. Step 0's
 action begins 144ms early and is damped away while the character is still distant, and the
@@ -523,7 +528,7 @@ Patch 1 adds ten more, covered by `test/actions.test.ts` and `test:e2e:patch1`:
 
 | # | Criterion | Where it is checked |
 |---|---|---|
-| 1 | No character on stage during EDITING | `test:e2e:patch1` |
+| 1 | No character before the first run; idles in background after | `test:e2e:patch1` |
 | 2 | Enters during the count-in, in position by step 0 | `test:e2e:patch1` |
 | 3 | Mid-action, not starting one, at the impact frame | `test:e2e:patch1` and `test/actions.test.ts` |
 | 4 | The drum fires on the step, the animation began before | `test:e2e:drift` |

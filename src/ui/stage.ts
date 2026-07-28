@@ -178,6 +178,19 @@ const CLOUD_LIFT = 7;
 /** How far a crossing cloud darkens out of the sky towards the ink. */
 const CLOUD_INK = 0.5;
 
+/**
+ * How far into the scene the character sits while idling between runs.
+ *
+ * After the first run resolves, the character never vanishes — it walks back into the
+ * background and stays there performing the live pattern at reduced depth, the same way
+ * any distant object is drawn. The next count-in brings it forward again.
+ *
+ * 0.28 puts it at roughly 28% of full scale, greyed towards LIGHT, and lifted about 50
+ * logical units above the ground line — clearly present but clearly behind the obstacle
+ * field. Adjust the constant and everything else (scale, ink, lift, draw order) follows.
+ */
+const IDLE_DEPTH = 0.28;
+
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
 
@@ -241,6 +254,8 @@ export interface StageFrame {
   currentStage: number | null;
   /** After repeated failures, the death camera holds the beat ruler up out of the dim. */
   hint: boolean;
+  /** True when the entry walks from the idle background position rather than the horizon. */
+  fromIdle: boolean;
 }
 
 interface Action {
@@ -368,7 +383,10 @@ export class StageRenderer {
 
     // While it is out in the distance the character belongs behind the obstacle field,
     // which is what stops it appearing to run through anything on the way in or out.
-    const distant = frame.character.mode === 'entering' || frame.character.mode === 'exiting';
+    const distant =
+      frame.character.mode === 'entering' ||
+      frame.character.mode === 'exiting' ||
+      frame.character.mode === 'idle';
     if (distant) this.drawCharacter(frame, stepFloat, camera, dinoX, w);
 
     // Back layer first, foreground over it, so recency reads as depth. Walls span the
@@ -786,15 +804,19 @@ export class StageRenderer {
     let depth = 1;
     let x = dinoX;
 
-    if (mode === 'entering') {
-      // Running in out of the distance rather than in from the wings. Nothing can be run
-      // through on the way, because there is no ground-level traversal to run through
-      // anything with — it arrives out of the depth of the scene instead.
-      depth = frame.character.progress;
+    if (mode === 'idle') {
+      depth = IDLE_DEPTH;
+      x = dinoX;
+    } else if (mode === 'entering') {
+      if (frame.fromIdle) {
+        depth = IDLE_DEPTH + (1 - IDLE_DEPTH) * frame.character.progress;
+      } else {
+        depth = frame.character.progress;
+      }
       x = dinoX - HORIZON_OFFSET * w * (1 - depth);
     } else if (mode === 'exiting') {
-      depth = 1 - frame.character.progress;
-      x = dinoX + HORIZON_OFFSET * w * frame.character.progress;
+      depth = 1 - (1 - IDLE_DEPTH) * frame.character.progress;
+      x = dinoX;
     } else if (mode === 'down' && camera) {
       tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
     }

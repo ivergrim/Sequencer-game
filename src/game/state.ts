@@ -95,7 +95,7 @@ const EXIT_FRACTION = 0.38;
 
 /** Where the character is, and whether the stage draws it at all. */
 export interface CharacterPose {
-  mode: 'hidden' | 'entering' | 'running' | 'exiting' | 'down';
+  mode: 'hidden' | 'entering' | 'running' | 'exiting' | 'down' | 'idle';
   /** 0..1 through `entering` or `exiting`; ignored otherwise. */
   progress: number;
 }
@@ -140,6 +140,12 @@ export class GameState {
   phase: Phase = 'editing';
   stageIndex = 0;
   pattern: Pattern;
+  /**
+   * True once a run has resolved (success or failure). The first entry comes from the
+   * deep horizon; every subsequent one starts from the idle background position, so the
+   * character remains visible between runs instead of vanishing.
+   */
+  hasRunOnce = false;
   /** True once stage 10 has been cleared. The chapter keeps playing. */
   complete = false;
   /** The most recent failure, kept so its marker stays on the ground. */
@@ -203,6 +209,7 @@ export class GameState {
   restore(data: SaveData): void {
     this.stageIndex = data.complete ? this.chapter.stages.length - 1 : data.stageIndex;
     this.complete = data.complete;
+    this.hasRunOnce = data.stageIndex > 0 || data.complete;
     for (const row of this.chapter.rows) {
       this.pattern[row] = [...data.pattern[row]];
       // Free play holds no locks, whatever the save carried.
@@ -376,6 +383,7 @@ export class GameState {
           if (barFloat >= this.runBar + 1) {
             this.advanceAtBar = this.runBar + 2;
             this.runPattern = null;
+            this.hasRunOnce = true;
             this.phase = 'success';
           }
         } else {
@@ -412,13 +420,17 @@ export class GameState {
     // performs the finished track for good: no exit, no entry, no empty stage.
     if (this.complete && this.phase !== 'failed') return { mode: 'running', progress: 1 };
 
+    const idleOrHidden: CharacterPose = this.hasRunOnce
+      ? { mode: 'idle', progress: 0 }
+      : { mode: 'hidden', progress: 0 };
+
     switch (this.phase) {
       case 'editing':
-        return { mode: 'hidden', progress: 0 };
+        return idleOrHidden;
 
       case 'armed': {
         const into = this.transport.barFloat - this.countInBar;
-        if (into < 0) return { mode: 'hidden', progress: 0 };
+        if (into < 0) return idleOrHidden;
         const fraction = this.entryFraction;
         if (into >= fraction) return { mode: 'running', progress: 1 };
         return { mode: 'entering', progress: into / fraction };
@@ -428,15 +440,12 @@ export class GameState {
         return { mode: 'running', progress: 1 };
 
       case 'success': {
-        // The run that clears the last stage does not exit. `complete` is only set when
-        // the stage actually advances, so without this the character would recede into
-        // the distance and then pop straight back in.
         if (this.stageIndex + 1 >= this.chapter.stages.length) {
           return { mode: 'running', progress: 1 };
         }
         const progress = this.successProgress / EXIT_FRACTION;
         return progress >= 1
-          ? { mode: 'hidden', progress: 1 }
+          ? { mode: 'idle', progress: 0 }
           : { mode: 'exiting', progress };
       }
 
@@ -517,16 +526,13 @@ export class GameState {
       step,
       instrument,
       at: this.transport.now,
-      // Where the world actually is right now, so the camera can take over without a
-      // discontinuity even when the collision is close enough that there is no room to
-      // decelerate — a failure on step 0 hands over exactly at the impact.
       fromStep: Math.min(this.transport.absoluteStepFloat, collisionStep),
       collisionStep,
     };
     this.runResult = null;
-    // The live pattern is audible again through the death camera and beyond.
     this.runPattern = null;
     this.failStreak++;
+    this.hasRunOnce = true;
     this.phase = 'failed';
     this.events.onFail?.(this.failure);
   }
