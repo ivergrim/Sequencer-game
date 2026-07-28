@@ -353,7 +353,7 @@ check(
 
 // ---------------------- it actually makes sound, with public/stems/ empty
 {
-  // Twenty-one drum notes and ten backing layers are running by now, and every one of
+  // Sixteen drum notes and ten backing layers are running by now, and every one of
   // those layers is a synthesized substitute, because public/stems/ is empty. Tap both
   // buses and confirm signal is coming out of each.
   const level = await page.evaluate(async () => {

@@ -134,11 +134,80 @@ when the file is absent. Real audio is a drop-in later — no code changes.
 
 The drum voices are always synthesized. There are no drum samples.
 
+### The bar the chapter builds
+
+```
+         0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+crash    x  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+openhat  .  .  x  .  .  .  x  .  .  .  x  .  .  .  x  .
+clap     .  .  .  .  x  .  .  .  .  .  .  .  x  .  .  .
+rim      .  .  .  x  .  .  .  x  .  .  .  x  .  x  .  x
+kick     x  .  .  .  x  .  .  .  x  .  .  .  x  .  .  .
+```
+
+Sixteen notes, and every part of it is doing a job the genre asks for. Kick on the
+quarters. **Open hat on the offbeat eighths and nowhere else** — the accented offbeat is
+the house signature, and this is the one thing the chapter previously got wrong: it also
+put hats on 3, 7, 11 and 15, so every offbeat was two open hats a sixteenth apart. A step
+is 121ms at 124 BPM and this open hat decays over 250ms, so the second always started
+while the first was still ringing. That is a wash, not a groove. Clap on the backbeat.
+Rim on the sixteenths the hat does not own, which in a full kit is the closed hat's job —
+there is no closed hat here, so the rim plays it, with 13 and 15 doubling up the last beat
+into the turnaround. One crash, on the downbeat, because it rings for 1.5s of a 1.94s bar
+and a second one anywhere would smear the loop.
+
+Steps 1, 5 and 9 stay empty. A loop with no gaps has no groove.
+
+The ten stages get there in the order a deep house track actually assembles, adding **at
+most two obstacles each** — the budget ramps 1, 2, 4, 6, 8, 10, 11, 12, 14, 16:
+
+| Stage | Adds | Instrument | Why here |
+|---|---|---|---|
+| 1 The downbeat | pillar 0 | kick 0 | where the bar begins |
+| 2 The half bar | pillar 8 | kick 8 | the bar has a middle |
+| 3 Four on the floor | pillar 4, 12 | kick 4, 12 | the floor, complete |
+| 4 The offbeat | bird 2, 10 | openhat 2, 10 | the offbeat at half strength — symmetric, so it is a groove on its own rather than an unfinished one |
+| 5 Every offbeat | bird 6, 14 | openhat 6, 14 | the loop stops being a metronome and becomes house |
+| 6 The backbeat | enemy 4, 12 | clap 4, 12 | whole, because half a backbeat sounds broken |
+| 7 The pickup | totem 15 | rim 15 | the first decoration rather than skeleton |
+| 8 The answer | totem 7 | rim 7 | 7 and 15 alone are already a groove |
+| 9 The shuffle | totem 3, 11 | rim 3, 11 | every beat now pushes into the next |
+| 10 The drop | wall 0, totem 13 | crash 0, rim 13 | the only full-height obstacle and the only 1.5s voice, over a two-tick run-up |
+
+The previous build added four obstacles at a time twice and had fourteen notes on screen
+by stage 6, which is where it stopped being readable. Nothing is authored as a solution —
+these are obstacle placements, and the required pattern falls out of `OBSTACLE_INSTRUMENT`
+in `game/types.ts`. `test/chapter1.test.ts` pins the shape of the finished bar, that no
+two open hats ever land in consecutive steps, and that no stage adds more than two.
+
+### The bed under it
+
+One bar of Fm7 into Dbmaj9, carried almost entirely by the bass moving F to Db underneath
+a pad that never changes shape — `[F3, Ab3, C4, Eb4]` is Fm7 over an F and Dbmaj9 over a
+Db, so the harmony moves without anything being struck. Ten layers arrive in the order a
+track builds: floor, warmth, harmonic motion, keys, voice, groove, height, tension,
+melody, release. The only one that pulses lands on the offbeat eighths, which the player
+already owns by the time it arrives.
+
 ### Dropping in real loops
 
 Chapter 1 expects these ten stems, in the order they enter:
 
-`bass`, `sub`, `bassline`, `pad`, `stab`, `chop`, `sweep`, `pad2`, `chords`, `lead`
+`sub`, `pad`, `bass`, `keys`, `voice`, `pulse`, `strings`, `swell`, `lead`, `chords`
+
+**No stem may contain drums.** Not a mixing preference — the player identifies drums by
+ear, so a backing layer that reads as percussion is a false answer: they hear a tick on
+a step, assume a note is already there, and stop looking for the one that is missing.
+Every drum in the game comes from the sequencer. Keep loops to bass, synths, voices and
+tonal effects; if a loop you want has a hat or a shaker riding along under it, it is not
+usable here however good the rest of it sounds.
+
+`test/stems.test.ts` holds the synthesized substitutes to the same line, through a
+recording stub for the audio context: no layer may allocate a noise source, and no
+envelope may reach full level in under 25ms. It checks the schedulers rather than the
+rendered signal on purpose — above the sub, where transients live, a sawtooth's own
+waveform is a spike train, and no envelope follower short enough to resolve a 5ms attack
+can tell that apart from a real attack.
 
 Constraints, all of them hard:
 
@@ -275,8 +344,8 @@ running through a pillar on a run that still cleared.
 
 ### Reading the stage
 
-By stage 10 there are twenty-one obstacles across one screen. Four systems keep that
-readable rather than merely dense.
+By stage 10 there are sixteen obstacles across one screen, stacked two deep at most.
+Four systems keep that readable rather than merely dense.
 
 **Committed notes freeze.** A stage only clears when the placed notes are exactly the
 derived solution, so everything on the grid at that moment is known-correct. It greys out
@@ -291,8 +360,9 @@ sit at the same height.
 
 **The kit arrives one instrument at a time.** A row is not in the layout at all until a
 stage introduces an obstacle that asks for it, so the chapter opens as a single kick lane
-and one question. Stage 4's birds bring the open hat in, stage 5's enemies the clap,
-stage 8's totems the rim, stage 9's wall the crash. Rows used to be present but greyed
+and one question. Stage 4's birds bring the open hat in, stage 6's enemies the clap,
+stage 7's totem the rim, and stage 10's wall the crash — the last row arrives with the
+last stage, which is also where the chapter's only 1.5s voice belongs. Rows used to be present but greyed
 and hatched, which still put five lanes of unanswerable questions on the first screen; an
 absent row asks nothing. Arrival is the only transition — once a row has appeared it stays
 for the rest of the chapter, whatever the current stage happens to introduce, because the
@@ -301,10 +371,9 @@ there.
 
 **There is one small type, not two.** The chapter originally ran a shaker alongside the
 open hat. The two sounded too close and their silhouettes read too close at speed, and no
-amount of redrawing fixed it, so the shaker was dropped and the open hat took its part —
-2, 3, 6, 7, 10, 11, 12, 14 and 15, which is a hat pattern a deep house track would
-actually play. The budget table is unchanged: stage 6 places hats where it used to place
-shakers, and stage 10's third obstacle became a clap on 14.
+amount of redrawing fixed it, so the shaker was dropped and the open hat took its part.
+That left the hat covering 2, 3, 6, 7, 10, 11, 12, 14 and 15 — which was the wrong part
+for it, and is why the chapter was later rebuilt around the bar below.
 
 **The current stage's obstacles are marked.** Everything this stage introduced wears a
 caret and bobs gently, for as long as it is the current stage's business. Tied to the
@@ -317,12 +386,12 @@ where there is nothing to collide with, and the vertical component stays inside 
 between bands. A uniform swell large enough to be unmissable also grows each obstacle into
 its neighbours' bands, which would break the separation at exactly the moment the player
 is looking. `test/bands.test.ts` pins that the bands stay disjoint at the peak of the
-swell, including on the five steps of chapter 1 that stack obstacles. The pillar/totem gap
+swell, including on the two steps of chapter 1 that stack obstacles. The pillar/totem gap
 caps the vertical component near 0.15, which is why the horizontal one carries the force.
 
 **Receded does not mean faint.** Older obstacles drop to `RECEDED_ALPHA` and a lighter
 ink, and that floor is deliberately high. They are still live hazards — every one will
-fail the run if its note goes missing — and by stage 10 eighteen of the twenty-one are
+fail the run if its note goes missing — and by stage 10 fourteen of the sixteen are
 receded, so sinking them near the paper made most of the world look like decoration. They
 sit clearly behind the current stage's arrivals and clearly in front of the ground litter.
 

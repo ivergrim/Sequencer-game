@@ -25,7 +25,8 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
 ## Working setup
 
 - **Repo**: `ivergrim/Sequencer-game` on GitHub. Owner: ivergrim (ivergrim@gmail.com).
-- **Branches**: **`main` only.** It is the default branch and the one that deploys.
+- **Branches**: normally **`main` only** — but there is a live exception right now, at
+  the end of this bullet. `main` is the default branch and the one that deploys.
   Earlier sessions each developed on a `claude/*` branch and pushed the same commits to
   both, which left a trail of merged duplicates holding nothing; the user deleted all of
   them and consolidated. Work goes to `main`.
@@ -33,6 +34,12 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
     does, treat it as a transient mirror of `main`, not a line of work — push the same
     commits to `main` in the same breath, and expect the user to want the mirror gone
     afterwards. Do not leave one behind and do not open a PR unless asked.
+  - **Live exception: `claude/chapter1-song-structure-dxtazt` is a real line of work, not
+    a mirror.** The chapter 1 rebuild lives there and the user asked for it to stay off
+    `main` — "we will be experimenting a bit so keep it separate". Do **not** mirror it to
+    `main` and do **not** open a PR for it unless they ask. Pushing to `main` is deploying
+    to production and this is not settled work: they want to hear it and iterate. The
+    mirror rule above applies again once they merge or abandon this branch.
   - **This environment cannot delete a remote branch**, so cleanup falls to the user:
     the git proxy accepts the connection and then hangs up on any delete-ref push
     (`send-pack: unexpected disconnect`, then `Everything up-to-date`), the GitHub MCP
@@ -122,13 +129,22 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 - `audio/stems.ts` — tries `public/stems/<name>.wav`, falls back to synthesized F-minor
   bed. `public/stems/` is empty by design; app must run silent-asset-free. Each bar is
   scheduled as a fresh source at `timeOfBar(n)` — never `AudioBufferSourceNode.loop`.
+  - **Nothing in here may sound like a drum**, and this is a correctness rule rather than
+    a mixing preference: the player identifies drums by ear, so a percussive backing layer
+    is a *false answer* — they hear a tick on a step, assume a note is already there, and
+    stop looking. Enforced, not merely intended: `tone` floors every attack at 25ms
+    (`MIN_ATTACK`), there is no noise source anywhere in the file, and
+    `test/stems.test.ts` fails the build if either changes. Do not add a shaker, a
+    percussion loop, or "just a little" filtered noise to the bed, however good it sounds.
 - `game/types.ts` — `Instrument = kick|clap|openhat|rim|crash`,
   `ObstacleType = pillar|enemy|bird|totem|wall`, `OBSTACLE_INSTRUMENT` mapping table
   (the only binding between world and sequencer; solutions are always derived, never
   authored — this is a hard design rule, no answer keys anywhere).
 - `game/chapter1.ts` — chapter data. 124 BPM, 16 steps, rows top-to-bottom
   `crash, openhat, clap, rim, kick` (mirrors on-stage vertical order). Budgets derived
-  (= active obstacle count): 1,2,4,8,10,14,15,17,18,21 — pinned by tests.
+  (= active obstacle count): 1,2,4,6,8,10,11,12,14,16 — pinned by tests. **Rebuilt** —
+  see "The chapter 1 rebuild" below; the old 1,2,4,8,10,14,15,17,18,21 table and the
+  double open hat that came with it are gone.
 - `game/simulate.ts` — pure resolver, walks steps in order, table lookup. **No hitbox /
   physics code anywhere in the repo** (brief criterion; a grep check was part of
   acceptance).
@@ -256,14 +272,60 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
   the gap to the nearest same-lane hit **in both directions** (the patch said forward
   only; that provably merges the step-15+step-0 kicks — commit message has the math).
 
+## The chapter 1 rebuild
+
+The user disliked how chapter 1 sounded, singling out "the double hi hat". They were
+right and the cause was structural: stage 4 placed open hats on 2, 6, 10, 14 and stage 6
+placed four more on 3, 7, 11, 15, so the finished bar asked for two open hats a sixteenth
+apart on every offbeat. A step is 121ms at 124 BPM and `openhat` decays over 250ms — the
+second hat always began while the first was still ringing. Every source on house drum
+programming says the same thing: one open hat per offbeat eighth, and the *closed* hat
+fills the 1/16 slots the open hat has not taken. There is no closed hat in this kit, so
+the rim now plays that part.
+
+The finished bar is kick 0/4/8/12, openhat 2/6/10/14, clap 4/12, rim 3/7/11/13/15,
+crash 0. Sixteen notes; steps 1, 5 and 9 deliberately empty. Full table and reasoning in
+`README.md` under "The bar the chapter builds", stage-by-stage comments in
+`chapter1.ts`.
+
+Constraints that came with the request and should be treated as standing:
+
+- **Kicks are fixed**: 1 on stage 1, 2 on stage 2, 4 on stage 3. User specified this.
+- **Never add too many hits early** — the old build added four obstacles at a time twice
+  and had fourteen notes on screen by stage 6. Cap is two per stage, pinned by a test.
+- **Ten stages**, still.
+- **No drums in the background**, for the reason in the `stems.ts` note above.
+
+Stem names changed wholesale (`sub, pad, bass, keys, voice, pulse, strings, swell, lead,
+chords`) — if real loops are ever dropped into `public/stems/`, they must match these
+filenames. `PROTOTYPE_BRIEF.md`'s stage table is now historical; it was already stale.
+
+Knock-on changes worth knowing about:
+
+- The crash row now arrives with **stage 10** rather than stage 9, so its 620ms arrival
+  animation can still be in flight during the stage-10 checks. `test:e2e:patch1` waits
+  for `.seq-row.unlocking` to clear before it compares sequencer markup across a failure;
+  without that wait it fails for the wrong reason.
+- Max stack is **two** obstacles on a step (was three). `test/bands.test.ts` and
+  `test:e2e:patch1` both pin it.
+- `test/save.test.ts` and `test/state.test.ts` used to hardcode `21` for "the whole
+  track". Now derived via `noteBudget`, so retuning the chapter cannot quietly make them
+  assert something smaller.
+- **A rendered-signal test for the no-drums rule does not work** and was tried and thrown
+  away. Above the sub — where transients live and where a highpass has to sit, because a
+  43.65Hz sub's 22.9ms period swamps any window short enough to resolve an attack — a
+  sawtooth's own waveform is a spike train. Every layer, including an 800ms-attack pad,
+  measured 50-70% "rise in 5ms". The metric was reading crest factor, not envelope.
+  `test/stems.test.ts` checks the gain automation through a stub context instead, which
+  tests the actual guarantee and runs in 13ms. Both of its rules were mutation-checked.
+
 ## Deviations from the written docs (do not "fix" these back)
 
 - Worker name `sequencer-game`, not `sequencing-runner`.
 - `DINO_FRACTION` 0.28, not ~0.15.
-- **Shaker instrument and pest obstacle are deleted.** Open hat took the whole hat part
-  (2,3,6,7,10,11,12,14,15). Stage 6 places birds; stage 10 is bird 12 / totem 13 /
-  **clap 14** (a bird on 14 would collide with stage 4's and break the exact-budget
-  single-solution property — verified before changing). Budget table unchanged.
+- **Shaker instrument and pest obstacle are deleted.** Open hat took the whole hat part.
+  That over-corrected — see "The chapter 1 rebuild" above — and the hat is now back to
+  the offbeat eighths alone, with the rim covering the sixteenths.
 - Brief criterion "removing a carried-over note causes a failure" is **unreachable via
   UI** (committed notes are locked). Resolver still behaves that way (unit-tested); the
   e2e suite forces it via `__debug` **at stage 10 before clearing it** — after that,
@@ -327,9 +389,17 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 
 ## State at handoff
 
-All 80 unit tests green; `test:e2e`, `test:e2e:patch1`, `test:e2e:responsive` and the
-5-minute `test:e2e:drift` all green; build and typecheck clean. Everything is on `main`,
-which is the only branch the repo has now.
+All 110 unit tests green (80 before, plus the chapter and backing-bed additions);
+`test:e2e`, `test:e2e:patch1` and `test:e2e:responsive` green; build and typecheck clean.
+
+`main` is untouched. The current work is on `claude/chapter1-song-structure-dxtazt` and
+is meant to stay there for now — the chapter 1 rebuild described above. It is unheard by
+the user as of this writing: it is verified structurally (the pattern, the ramp, the
+no-drums rule, no clipping — the playthrough suite taps the buses and reports the mix
+peaking at 0.882) but nobody has actually listened to it yet, and "does it sound good"
+is the one thing none of that proves. Expect the next round to be tuning by ear:
+mix balance between the ten backing layers, the rim's placement on 13 and 15, and whether
+the crash arriving only at stage 10 is too late a reveal for the row.
 
 The last session tuned the idle dino that the session before it introduced. Changes:
 the idle character is now composited behind the entire scene using canvas
