@@ -185,12 +185,14 @@ const CLOUD_INK = 0.5;
  * background and stays there performing the live pattern at reduced depth, the same way
  * any distant object is drawn. The next count-in brings it forward again.
  *
- * 0.55 puts it at roughly 40% of full scale, greyed towards LIGHT, and lifted about
- * 30 logical units above the ground line — clearly present but clearly behind the
- * obstacle field. Adjust the constant and everything else (scale, ink, lift, draw order)
- * follows.
+ * 0.55 puts it at roughly 40% of full scale, greyed towards LIGHT. A separate
+ * IDLE_Y_DEPTH (lower) lifts the character closer to the horizon than its size alone
+ * would place it, so it reads as standing on distant ground rather than floating above
+ * the near ground line. The exit and entry animations interpolate the y-depth alongside
+ * the scale depth so the walk stays smooth.
  */
 const IDLE_DEPTH = 0.55;
+const IDLE_Y_DEPTH = 0.25;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;
@@ -824,19 +826,25 @@ export class StageRenderer {
     let depth = 1;
     let x = dinoX;
 
+    let yDepth = depth;
+
     if (mode === 'idle') {
       depth = IDLE_DEPTH;
+      yDepth = IDLE_Y_DEPTH;
       x = dinoX;
     } else if (mode === 'entering') {
       if (frame.fromIdle) {
         depth = IDLE_DEPTH + (1 - IDLE_DEPTH) * frame.character.progress;
+        yDepth = IDLE_Y_DEPTH + (1 - IDLE_Y_DEPTH) * frame.character.progress;
         x = dinoX;
       } else {
         depth = frame.character.progress;
+        yDepth = depth;
         x = dinoX - HORIZON_OFFSET * w * (1 - depth);
       }
     } else if (mode === 'exiting') {
       depth = 1 - (1 - IDLE_DEPTH) * frame.character.progress;
+      yDepth = 1 - (1 - IDLE_Y_DEPTH) * frame.character.progress;
       x = dinoX;
     } else if (mode === 'down' && camera) {
       tumble = clamp01((camera.elapsed - DEATH_CAMERA.slowmo) / 0.5);
@@ -866,8 +874,9 @@ export class StageRenderer {
     // (1/distance) accelerates far harder than this, and lands as a lunge at the camera;
     // this is the readable half of it.
     const near = depth * Math.sqrt(depth);
+    const yNear = yDepth * Math.sqrt(yDepth);
     const scale = CHAR_SCALE * (HORIZON_SCALE + (1 - HORIZON_SCALE) * near);
-    const groundY = GROUND_Y - (1 - near) * HORIZON_LIFT;
+    const groundY = GROUND_Y - (1 - yNear) * HORIZON_LIFT;
     const ink = depth >= 1 ? INK : mixInk(LIGHT, INK, near);
     // Fade the last stretch out entirely, so it does not pop into or out of nothing.
     const fade = clamp01(depth / 0.18);
