@@ -357,14 +357,14 @@ Open items the user has deferred rather than declined:
 
 - Beat labels above the sequencer — **declined**, do not revisit.
 
-**Deployment:** pushing to `main` IS deploying to production. Cloudflare Workers Builds
-watches the repo and builds + deploys every push automatically — there is no manual
-deploy step. `dist/` is gitignored; the build runs on Cloudflare's side, not locally.
-If the user reports that a change is not visible, the most likely cause is **browser
-caching or CDN propagation delay** — suggest a hard refresh (`Ctrl-Shift-R` /
-`Cmd-Shift-R`) or waiting a minute, not a missing deploy. To verify changes yourself
-before pushing, run the Vite dev server (`npx vite --port 5199`) and point e2e
-screenshots at it.
+**Deployment:** pushing to `main` IS deploying to production (Workers Builds, see top of
+file). If the user reports a change is not visible, **take a screenshot yourself** before
+blaming caching — `npx vite --port 5199` serves live source, and the e2e harness at
+`test/e2e/harness.mjs` can open it in headless Chromium for a screenshot. In this
+session several rounds of small constant tweaks (within the 58 px `HORIZON_LIFT` range)
+were genuinely invisible, and misdiagnosing that as a deploy issue wasted time. Always
+verify visual changes with a screenshot capture before telling the user the change is
+live.
 
 Known accepted limitations: background-tab stem gaps; stems directory empty pending real
 loops (drop-in, constraints in README). `ui/stage.ts` is still ~1100 lines and would
