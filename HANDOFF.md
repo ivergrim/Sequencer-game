@@ -357,14 +357,14 @@ Open items the user has deferred rather than declined:
 
 - Beat labels above the sequencer — **declined**, do not revisit.
 
-**Deployment note:** `dist/` is gitignored — pushing source changes to `main` does
-**not** update what the user sees. The site is deployed via Cloudflare Workers
-(`npm run deploy`, which runs `npm run build && wrangler deploy`). After pushing source
-changes, **you must tell the user to deploy** (or deploy yourself if credentials are
-available). To verify changes visually before the user sees them, run the Vite dev
-server (`npx vite --port 5199`) and point e2e screenshots or manual checks at it — that
-serves the live source, not the stale `dist/`. Several rounds of changes in this session
-appeared invisible to the user because only `main` was updated without a deploy.
+**Deployment:** pushing to `main` IS deploying to production. Cloudflare Workers Builds
+watches the repo and builds + deploys every push automatically — there is no manual
+deploy step. `dist/` is gitignored; the build runs on Cloudflare's side, not locally.
+If the user reports that a change is not visible, the most likely cause is **browser
+caching or CDN propagation delay** — suggest a hard refresh (`Ctrl-Shift-R` /
+`Cmd-Shift-R`) or waiting a minute, not a missing deploy. To verify changes yourself
+before pushing, run the Vite dev server (`npx vite --port 5199`) and point e2e
+screenshots at it.
 
 Known accepted limitations: background-tab stem gaps; stems directory empty pending real
 loops (drop-in, constraints in README). `ui/stage.ts` is still ~1100 lines and would
