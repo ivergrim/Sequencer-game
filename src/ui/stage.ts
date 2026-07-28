@@ -185,11 +185,12 @@ const CLOUD_INK = 0.5;
  * background and stays there performing the live pattern at reduced depth, the same way
  * any distant object is drawn. The next count-in brings it forward again.
  *
- * 0.28 puts it at roughly 28% of full scale, greyed towards LIGHT, and lifted about 50
- * logical units above the ground line — clearly present but clearly behind the obstacle
- * field. Adjust the constant and everything else (scale, ink, lift, draw order) follows.
+ * 0.45 puts it at roughly a third of full scale, greyed towards LIGHT, and lifted
+ * about 35 logical units above the ground line — clearly present but clearly behind the
+ * obstacle field. Adjust the constant and everything else (scale, ink, lift, draw order)
+ * follows.
  */
-const IDLE_DEPTH = 0.28;
+const IDLE_DEPTH = 0.45;
 
 /** Period of the culprit's red breath under the death camera. */
 const CULPRIT_PULSE_SECONDS = 1.1;

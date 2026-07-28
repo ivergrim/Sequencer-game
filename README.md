@@ -427,7 +427,7 @@ BPM lasts 121ms and a subtle move simply is not seen.
 The first entry comes out of the deep horizon — small, grey and lifted towards the
 vanishing point, behind the obstacle layer, resolving to full size and full ink as it
 reaches the launch position. After that first run resolves, the character never vanishes:
-it walks back to an idle position at about 28% depth (`IDLE_DEPTH`) and stays there
+it walks back to an idle position at about 45% depth (`IDLE_DEPTH`) and stays there
 performing the live pattern, drawn behind the obstacle field. The next count-in brings it
 forward from the idle position rather than from the deep horizon, so the return is a
 shorter, more grounded walk. The lateral travel is deliberately tiny either way, because
@@ -441,7 +441,7 @@ window went straight through a character that was not yet running the bar and an
 none of them. Out in the distance it is drawn behind the obstacle field and nothing
 touches it, so the fix is to still be arriving until the count is over: the first entry
 starts at a twentieth of full size up at the vanishing point; subsequent entries start from
-the idle position at 28% size. Both reach the launch position as the last beat of the
+the idle position at about a third of full size. Both reach the launch position as the last beat of the
 count-in finishes.
 
 It cannot arrive exactly on the downbeat, because two things reach back from it. Step 0's
