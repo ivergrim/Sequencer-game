@@ -10,6 +10,10 @@ import type { Instrument } from '../game/types';
  *
  * Edits are live: toggling a cell changes what is audible on the very next pass. There
  * is no apply step.
+ *
+ * Everything drawn here is derived from the state each frame and compared against what is
+ * already on screen — the pattern, the row unlocks and the stuck arrow alike — so nothing
+ * is ever read back out of the DOM.
  */
 
 const STATUS: Record<Phase, string> = {
@@ -30,6 +34,14 @@ export class SequencerUI {
 
   private readonly rows = new Map<Instrument, HTMLElement>();
   private readonly cells = new Map<Instrument, HTMLButtonElement[]>();
+
+  /**
+   * The stuck arrow. One element for the life of the page, moved between cells: only one
+   * can ever be up, and re-parenting it restarts its animation on arrival for free.
+   */
+  private readonly arrow: HTMLElement;
+  /** The cell currently holding the arrow, so the frame loop never reads back from it. */
+  private arrowHost: HTMLButtonElement | null = null;
 
   private readonly unlocked = new Set<Instrument>();
   /** What the DOM currently shows, so the frame loop never reads back from it. */
@@ -87,7 +99,10 @@ export class SequencerUI {
         // Quarter note columns get slightly stronger column separators.
         cell.dataset.quarter = String(step % 4 === 0);
         cell.setAttribute('aria-pressed', 'false');
-        cell.setAttribute('aria-label', `${instrument} step ${step}`);
+        // Kept on the element so the arrow can extend the label and put it back again
+        // without the frame loop having to parse what is already there.
+        cell.dataset.label = `${instrument} step ${step}`;
+        cell.setAttribute('aria-label', cell.dataset.label);
 
         const pad = document.createElement('span');
         pad.className = 'pad';
@@ -110,6 +125,12 @@ export class SequencerUI {
     this.playhead.className = 'seq-playhead';
     this.grid.append(this.playhead);
 
+    // Built once and left detached until a cell earns it. Decorative to a screen reader:
+    // the cell it lands on carries the meaning, and it is the cell that gets labelled.
+    this.arrow = document.createElement('span');
+    this.arrow.className = 'seq-arrow';
+    this.arrow.setAttribute('aria-hidden', 'true');
+
     this.root.append(head, this.grid);
     container.append(this.root);
   }
@@ -120,6 +141,7 @@ export class SequencerUI {
 
     this.syncUnlocks(state);
     this.syncPattern(state);
+    this.syncArrow(state);
 
     // Free play has no budget, so the readout becomes a plain note count.
     const budgetText = state.complete
@@ -142,7 +164,9 @@ export class SequencerUI {
     // FAILED reads as EDITING here on purpose. Nothing in the sequencer may change
     // appearance when a run fails: the stage says which obstacle and therefore which
     // instrument, and working out which step from its position against the quarter-note
-    // scenery is the skill the game exists to teach.
+    // scenery is the skill the game exists to teach. The arrow is the floor under that
+    // rule rather than an exception to it — it costs a second failure on the same
+    // obstacle and never lands until the camera is done. See `ARROW_AFTER_FAILURES`.
     const phase = state.phase === 'failed' ? 'editing' : state.phase;
     const statusText = state.complete && phase === 'editing' ? 'free play' : STATUS[phase];
     if (statusText !== this.lastStatus) {
@@ -198,6 +222,31 @@ export class SequencerUI {
     }
   }
 
+  /**
+   * Put the arrow on the cell the state is pointing at, or take it off the grid.
+   *
+   * `state.arrowCell` is derived every frame rather than pushed as an event, so arriving,
+   * moving and leaving are all the same comparison against what is currently on screen.
+   * That is what lets it follow the cell's own state: filling the cell it points at
+   * returns null here on the very next frame, and emptying it again brings it back.
+   */
+  private syncArrow(state: GameState): void {
+    const target = state.arrowCell;
+    const cell = target ? (this.cells.get(target.instrument)?.[target.step] ?? null) : null;
+    if (cell === this.arrowHost) return;
+
+    if (this.arrowHost) {
+      delete this.arrowHost.dataset.hint;
+      this.arrowHost.setAttribute('aria-label', this.arrowHost.dataset.label ?? '');
+    }
+    this.arrow.remove();
+
+    this.arrowHost = cell;
+    if (!cell) return;
+    cell.dataset.hint = 'true';
+    cell.setAttribute('aria-label', `${cell.dataset.label ?? ''}, missing note`);
+    cell.append(this.arrow);
+  }
 
   /** Placing a note with zero budget remaining. */
   shakeBudget(): void {

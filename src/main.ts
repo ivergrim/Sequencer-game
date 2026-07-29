@@ -64,9 +64,11 @@ async function start(): Promise<void> {
   const stage = new StageRenderer(canvas);
 
   const state = new GameState(chapter, transport, {
-    // Nothing happens in the sequencer on failure. The stage's death camera is the
-    // whole of the visible feedback, by design; the thud lands where the missing drum
-    // hit would have, at the exact audio time of the collision step.
+    // Nothing happens in the sequencer at the moment of failure. The stage's death
+    // camera is the whole of the feedback there, by design; the thud lands where the
+    // missing drum hit would have, at the exact audio time of the collision step. The
+    // arrow a repeated failure earns is a state the frame loop reads afterwards, not an
+    // event fired from here, so it can never land on top of the camera.
     onFail: (failure) => triggerFailThud(transport.timeOfStep(failure.collisionStep)),
     onSuccess: (flourishTime) => triggerSuccessSting(flourishTime, transport.stepDuration),
     onStageAdvance: (index) => {

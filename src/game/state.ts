@@ -4,7 +4,7 @@ import { activeObstacles, activeStems, noteBudget } from './chapter1';
 import type { SaveData } from './save';
 import { requiredInstruments, simulate } from './simulate';
 import type { Chapter, Instrument, Obstacle, Pattern, Result } from './types';
-import { clonePattern, countNotes, emptyPattern } from './types';
+import { OBSTACLE_INSTRUMENT, clonePattern, countNotes, emptyPattern } from './types';
 
 /**
  * The run state machine.
@@ -64,6 +64,40 @@ export const RUN_DECISION_LEAD = 0.3;
  * narrows; the answer is still theirs to find.
  */
 export const HINT_AFTER_FAILURES = 3;
+
+/**
+ * Failures on one obstacle before the sequencer points at the cell it wants.
+ *
+ * The first failure on an obstacle changes nothing on the grid. The stage names the
+ * obstacle, translating its position into a step is the skill being taught, and dying
+ * once is not being stuck — it is the game working. Missing the *same* obstacle a second
+ * time is, so from then on an arrow names its cell outright and stops asking.
+ *
+ * The tally is per obstacle rather than global on purpose: a player who dies once each on
+ * three different obstacles is making progress through a stage, not stuck on it, and gets
+ * no arrows. It resets the moment an obstacle is passed, so the help never outlives the
+ * trouble that earned it, and an obstacle already cleared once asks its question again
+ * from scratch if its note is later removed.
+ */
+export const ARROW_AFTER_FAILURES = 2;
+
+/** A single cell of the grid: the note an obstacle demands, and the arrow's target. */
+export interface Cell {
+  instrument: Instrument;
+  step: number;
+}
+
+/**
+ * An obstacle's identity, for the failure tally.
+ *
+ * Keyed by the note it demands rather than by its own type, which is the same thing:
+ * `OBSTACLE_INSTRUMENT` maps each of the five types to a distinct instrument, so an
+ * (instrument, step) pair names exactly one obstacle — and it is also the cell an arrow
+ * for that obstacle would point at.
+ */
+function cellKey(instrument: Instrument, step: number): string {
+  return `${instrument}:${step}`;
+}
 
 /**
  * How long before the run bar the character is finally at the launch position.
@@ -152,6 +186,21 @@ export class GameState {
   failure: Failure | null = null;
   /** Failures on this stage since it was last cleared. Drives the death camera hint. */
   failStreak = 0;
+  /**
+   * Failures per obstacle since that obstacle was last passed, keyed by `cellKey`.
+   *
+   * Deliberately not part of the save: being stuck is a property of the sitting, not of
+   * the progress, and a player coming back tomorrow should get the stage's own feedback
+   * before the grid starts answering for it.
+   */
+  private readonly obstacleFailures = new Map<string, number>();
+  /**
+   * The cell the arrow points at, fixed at the failure that earned it.
+   *
+   * Whether it is *shown* is decided per frame by `arrowCell`, from the phase and from
+   * the live pattern — this is only which cell it would be.
+   */
+  private arrowTarget: Cell | null = null;
   /**
    * Notes committed by clearing a stage. They keep playing but can no longer be changed.
    *
@@ -274,6 +323,10 @@ export class GameState {
    * fails. Locking the grid during a run would do exactly that: the lock would lift the
    * instant a run failed, which is a visible change caused by failing. Editing stays
    * live throughout instead, which is also what the design asks for everywhere else.
+   *
+   * The arrow does not break that rule. It is not a reaction to the failure — it never
+   * appears at the collision, it waits for the camera to finish, and it takes a second
+   * failure on the same obstacle to appear at all. See `ARROW_AFTER_FAILURES`.
    */
   toggle(instrument: Instrument, step: number): void {
     if (!this.isUnlocked(instrument)) return;
@@ -534,7 +587,33 @@ export class GameState {
     this.failStreak++;
     this.hasRunOnce = true;
     this.phase = 'failed';
+    this.tallyFailure(instrument, step);
     this.events.onFail?.(this.failure);
+  }
+
+  /**
+   * Charge this failure to the obstacle that caused it, and credit every obstacle the
+   * run got past.
+   *
+   * Everything before the collision was answered on the way in — the run reached the
+   * collision, so by definition it cleared all of them — which makes them passed
+   * obstacles, and a passed obstacle's tally starts over. Only the one actually stopping
+   * the run accumulates.
+   */
+  private tallyFailure(instrument: Instrument, step: number): void {
+    for (const obstacle of this.obstacles) {
+      if (obstacle.step >= step) continue;
+      this.obstacleFailures.delete(cellKey(OBSTACLE_INSTRUMENT[obstacle.type], obstacle.step));
+    }
+
+    const key = cellKey(instrument, step);
+    const failures = (this.obstacleFailures.get(key) ?? 0) + 1;
+    this.obstacleFailures.set(key, failures);
+
+    // At most one arrow, always this run's miss. A run reports its first miss and nothing
+    // past it, so a player missing several notes resolves them one run at a time; and a
+    // run that got further than the last one retires the older arrow by replacing it.
+    this.arrowTarget = failures >= ARROW_AFTER_FAILURES ? { instrument, step } : null;
   }
 
   /** Whether the death camera should hold the beat ruler up out of the dim. */
@@ -542,10 +621,34 @@ export class GameState {
     return this.failStreak >= HINT_AFTER_FAILURES;
   }
 
+  /**
+   * The cell an arrow points at right now, or null for no arrow.
+   *
+   * Derived rather than dismissed, so it answers the two things the player does with it:
+   *
+   * - it is gone the moment the cell is filled, and back the moment it is emptied again,
+   *   because the arrow is a statement about that cell being empty rather than a notice
+   *   that was shown once;
+   * - it waits out the death camera and stands down for the run itself. The failure's own
+   *   feedback belongs to the stage — the arrow is for the editing that follows, and it is
+   *   still there through the count-in, where an edit still counts.
+   */
+  get arrowCell(): Cell | null {
+    const target = this.arrowTarget;
+    if (!target) return null;
+    if (this.phase !== 'editing' && this.phase !== 'armed') return null;
+    if (this.pattern[target.instrument][target.step]) return null;
+    return target;
+  }
+
   private advanceStage(): void {
     this.advanceAtBar = null;
     this.runResult = null;
     this.failStreak = 0;
+    // The stage cleared, so every obstacle in it was passed: every tally starts over and
+    // the arrow, whose obstacle is now behind the player, goes with them.
+    this.obstacleFailures.clear();
+    this.arrowTarget = null;
 
     if (this.stageIndex + 1 >= this.chapter.stages.length) {
       // The chapter is done and free play begins: the obstacles leave the world, so

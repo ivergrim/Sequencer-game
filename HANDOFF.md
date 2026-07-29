@@ -79,6 +79,7 @@ npm run build               # tsc + vite build
 npm run dev                 # dev server (use port 5199 for the e2e scripts)
 npm run test:e2e            # full 10-stage playthrough, free play, reload
 npm run test:e2e:patch1     # patch-1 + later acceptance criteria
+npm run test:e2e:arrow      # the per-obstacle stuck arrow, in a real grid
 npm run test:e2e:responsive # desktop + phone viewports, touch controls
 npm run test:e2e:drift      # 5-minute no-drift proof (run when touching timing)
 npm run test:e2e:shots      # stage art captures, for eyeballing
@@ -160,6 +161,15 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
     and `laneFor(instrument, bar)` are how callers get the right lane.
   - `DEATH_CAMERA` constants. `failStreak` / `hintActive` drive the stuck-player hint
     (`HINT_AFTER_FAILURES = 3`), reset on stage advance.
+  - **Help escalates twice, and the second step is per obstacle.** `obstacleFailures`
+    tallies deaths per obstacle — keyed by the cell it demands, since obstacle type →
+    instrument is one-to-one — and `ARROW_AFTER_FAILURES = 2` puts a black arrow on that
+    cell in the sequencer. Failing once each on three different obstacles earns nothing;
+    the tally for everything *before* a collision is cleared on every run, because a run
+    that got that far answered them. `arrowCell` is derived per frame from the phase and
+    the live pattern (never during running/success/failed, never on a filled cell), so
+    filling the cell retires the arrow and emptying it brings the same one back. Not
+    persisted: being stuck is a property of the sitting, not of the save.
   - Note locking (`locked` pattern): clearing a stage commits its notes — greyed, inert,
     still audible, Escape spares them. **Completion clears every lock** (free play).
   - Character pose model (`hidden/entering/running/exiting/down`); after `complete` the
@@ -169,6 +179,14 @@ npm run test:e2e:shots      # stage art captures, for eyeballing
 - `ui/sequencer.ts` — plain DOM grid. Playhead is one element driven by a CSS var from
   stepFloat. **Nothing in the sequencer may change appearance on failure** (patch 1 C2)
   — no flash, no status change (FAILED renders as "editing"), no dimming.
+  - The **one** mark that ever appears on the grid is the stuck arrow (`.seq-arrow`,
+    `ARROW_AFTER_FAILURES` above), and it is not failure styling: it costs a second death
+    on the same obstacle and never lands until the camera has released. One element for
+    the life of the page, re-parented into the target cell (which also gets
+    `data-hint="true"` and an extended `aria-label`); `syncArrow` compares against what is
+    on screen like the rest of the frame loop. `test:e2e:arrow` covers the wiring end to
+    end, and `test:e2e:patch1`'s "no cell changes class on failure" checks still hold —
+    the arrow changes no classes and shows only after the camera.
   - A locked row is **`display: none`**, not greyed: the kit arrives one instrument at a
     time (kick / stage 4 openhat / 5 clap / 8 rim / 9 crash) and each row's arrival
     animates its height open. `syncUnlocks` only ever adds, so a row that has appeared

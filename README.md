@@ -50,6 +50,7 @@ npm run dev                 # in one terminal
 npm run test:e2e            # in another: plays stage 1 through 10
 npm run test:e2e:drift      # five minutes, then measures alignment
 npm run test:e2e:patch1     # the patch 1 acceptance criteria
+npm run test:e2e:arrow      # the stuck arrow: when it appears, where it lands, what clears it
 npm run test:e2e:responsive # desktop and phone viewports, touch controls
 npm run test:e2e:shots      # captures stage art, and the announcement on and off a crossing
 ```
@@ -283,7 +284,8 @@ and that the stage does not move a pixel when it does.
 
 It behaves identically in EDITING and after a failure, which is the same rule the
 sequencer follows: the death camera names the obstacle, and a banner that changed after a
-failure would give away for free that there is something to find. FAILED is also the
+failure would give away for free that there is something to find. Nothing here is
+escalated by repetition the way the arrow is — the banner never has anything to add. FAILED is also the
 phase R exists for, so the banner has to be pressable under the camera. In free play it
 retires for good, along with runs themselves.
 
@@ -318,7 +320,7 @@ src/
 `test/reaction.test.ts` pins the obstacle reaction's onset to the moment an obstacle
 reaches the launch position; `test/state.test.ts` and `test/save.test.ts` drive the state
 machine against a hand-cranked clock from `test/helpers.ts`, covering the run snapshot,
-the failure hint, free play and the save round-trip.
+the failure hint, the per-obstacle arrow, free play and the save round-trip.
 
 Five commitments hold the whole thing up:
 
@@ -487,13 +489,40 @@ out *which step* from its position against the quarter-note landmarks is the ski
 taught. That principle needs a floor under it, though, or a player who cannot make the
 translation has nothing coming.
 
-After `HINT_AFTER_FAILURES` (3) consecutive failures on one stage, the death camera also
-holds the landmarks and the launch patch up out of the dim, drawn at the ground litter's
-weight rather than the sky's so they actually read against the dimmed stage. Nothing new
-is drawn and no step is named: the ruler that was always there simply stays legible while
-the camera holds, and the search narrows from sixteen steps to a position relative to a
-visible beat. The streak resets when the stage clears, so the help never outlives the
-trouble that earned it.
+Help escalates in two steps, and both are earned by failing rather than handed out.
+
+**The ruler stays legible.** After `HINT_AFTER_FAILURES` (3) consecutive failures on one
+stage, the death camera also holds the landmarks and the launch patch up out of the dim,
+drawn at the ground litter's weight rather than the sky's so they actually read against
+the dimmed stage. Nothing new is drawn and no step is named: the ruler that was always
+there simply stays legible while the camera holds, and the search narrows from sixteen
+steps to a position relative to a visible beat. The streak resets when the stage clears,
+so the help never outlives the trouble that earned it.
+
+**Then the grid answers.** After `ARROW_AFTER_FAILURES` (2) failures on *the same
+obstacle*, a black arrow points at the exact cell the missing note belongs in. The first
+death on an obstacle still changes nothing in the sequencer — that one is the game
+working, and the stage-side feedback is the whole of it. The second is a player who has
+looked and not found it, and at that point being told is better than being taught again.
+
+The tally is per obstacle, which is the difference between being stuck and making
+progress. A player who dies once each on three different obstacles is getting further
+every run and sees no arrow at all; a player who dies twice on the same one has stopped
+getting further. Passing an obstacle clears its tally — every obstacle before the
+collision was answered on the way in, so a run that gets further resets everything it got
+past — and an obstacle already cleared once asks its question from scratch if its note is
+later removed.
+
+The arrow is derived from the cell's own state rather than dismissed:
+
+- it appears once the death camera has finished, never on top of it, and stays through
+  the editing that follows and through the next count-in, where an edit still counts;
+- it is gone the instant the cell is filled, and back the instant it is emptied again;
+- it never shows during the run itself, or the flourish after a clear.
+
+There is only ever one, because a run reports its first miss and nothing past it. A player
+missing several notes resolves them one run at a time, which is the same one-question-at-a-
+time shape the stage ramp has.
 
 ### Actions
 

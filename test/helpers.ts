@@ -3,7 +3,7 @@ import type { Transport } from '../src/audio/transport';
 import { CHAPTER_1 } from '../src/game/chapter1';
 import { requiredNotes } from '../src/game/simulate';
 import type { StateEvents } from '../src/game/state';
-import { GameState, RUN_DECISION_LEAD } from '../src/game/state';
+import { DEATH_CAMERA, GameState, RUN_DECISION_LEAD } from '../src/game/state';
 
 /**
  * A hand-cranked stand-in for the transport: the same derived-position arithmetic,
@@ -53,6 +53,32 @@ export function armAndDecide(clock: StubClock, state: GameState): number {
   clock.now = clock.timeOfBar(runBar) - RUN_DECISION_LEAD + 0.001;
   state.update();
   return runBar;
+}
+
+/**
+ * Arm a run and walk the clock through it until it collides.
+ *
+ * Steps the clock rather than jumping to a known collision time, so it works for a
+ * failure anywhere in the bar. It stops inside the death camera, which is where a failed
+ * run actually leaves the player.
+ */
+export function failRun(clock: StubClock, state: GameState): void {
+  state.requestRun();
+  const runBar = clock.nextBarBoundary(clock.now + 0.15) + 1;
+  const end = clock.timeOfBar(runBar + 1);
+  while (clock.now < end) {
+    clock.now += clock.stepDuration / 2;
+    state.update();
+    if (state.phase === 'failed') return;
+  }
+  throw new Error('the run was expected to fail and did not');
+}
+
+/** Sit out the death camera and land back in EDITING. */
+export function releaseCamera(clock: StubClock, state: GameState): void {
+  clock.now += DEATH_CAMERA.total + 0.001;
+  state.update();
+  expect(state.phase).toBe('editing');
 }
 
 /** Place the derived solution, run it, and walk the clock through to the advance. */

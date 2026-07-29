@@ -7,7 +7,7 @@ import {
   HINT_AFTER_FAILURES,
   RUN_DECISION_LEAD,
 } from '../src/game/state';
-import { StubClock, armAndDecide, clearStage, make } from './helpers';
+import { StubClock, armAndDecide, clearStage, failRun, make, releaseCamera } from './helpers';
 
 describe('the run pattern snapshot', () => {
   it('decides the run just before the run bar, not on it', () => {
@@ -175,22 +175,11 @@ describe('the entry', () => {
 });
 
 describe('the failure hint', () => {
-  /** Run the empty pattern into stage 1's pillar and land in FAILED. */
-  function failOnce(clock: StubClock, state: GameState): void {
-    state.requestRun();
-    const runBar = clock.nextBarBoundary(clock.now + 0.15) + 1;
-    clock.now = clock.timeOfBar(runBar) - RUN_DECISION_LEAD + 0.001;
-    state.update();
-    clock.now = clock.timeOfBar(runBar) - DEATH_CAMERA.replay + 0.001;
-    state.update();
-    expect(state.phase).toBe('failed');
-  }
-
   it('arms after enough consecutive failures on one stage', () => {
     const { clock, state } = make();
     for (let i = 1; i <= HINT_AFTER_FAILURES; i++) {
       expect(state.hintActive).toBe(false);
-      failOnce(clock, state);
+      failRun(clock, state);
       expect(state.failStreak).toBe(i);
     }
     expect(state.hintActive).toBe(true);
@@ -198,12 +187,141 @@ describe('the failure hint', () => {
 
   it('resets when the stage is finally cleared', () => {
     const { clock, state } = make();
-    for (let i = 0; i < HINT_AFTER_FAILURES; i++) failOnce(clock, state);
+    for (let i = 0; i < HINT_AFTER_FAILURES; i++) failRun(clock, state);
     expect(state.hintActive).toBe(true);
 
     clearStage(clock, state);
     expect(state.failStreak).toBe(0);
     expect(state.hintActive).toBe(false);
+  });
+});
+
+describe('the stuck arrow', () => {
+  /** Fail a run and come back out the far side of the death camera, in EDITING. */
+  function die(clock: StubClock, state: GameState): void {
+    failRun(clock, state);
+    releaseCamera(clock, state);
+  }
+
+  /**
+   * Clear the two single-kick stages and stop on stage 3, whose two new pillars — kick 4
+   * and kick 12 — are the chapter's first pair of obstacles that can be missed
+   * separately. Stages 1 and 2 are committed by then, so only these two can break.
+   */
+  function twoOpenObstacles() {
+    const made = make();
+    clearStage(made.clock, made.state);
+    clearStage(made.clock, made.state);
+    expect(made.state.stageIndex).toBe(2);
+    return made;
+  }
+
+  it('says nothing the first time an obstacle is missed', () => {
+    const { clock, state } = make();
+    die(clock, state);
+    expect(state.failure?.step).toBe(0);
+    expect(state.arrowCell).toBeNull();
+  });
+
+  it('points at the missing cell from the second failure on', () => {
+    const { clock, state } = make();
+    die(clock, state);
+    die(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 0 });
+
+    // And every failure after that, rather than the second one only.
+    die(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 0 });
+  });
+
+  it('waits for the death camera to finish', () => {
+    const { clock, state } = make();
+    die(clock, state);
+
+    failRun(clock, state);
+    expect(state.phase).toBe('failed');
+    expect(state.arrowCell).toBeNull();
+
+    releaseCamera(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 0 });
+  });
+
+  it('stays up through the count-in and stands down for the run', () => {
+    const { clock, state } = make();
+    die(clock, state);
+    die(clock, state);
+
+    // An edit made during the count-in still counts, so the arrow is still worth
+    // something there and stays.
+    state.requestRun();
+    const runBar = clock.nextBarBoundary(clock.now + 0.15) + 1;
+    expect(state.phase).toBe('armed');
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 0 });
+
+    clock.now = clock.timeOfBar(runBar) - RUN_DECISION_LEAD + 0.001;
+    state.update();
+    expect(state.phase).toBe('running');
+    expect(state.arrowCell).toBeNull();
+  });
+
+  it('follows the cell instead of being dismissed once', () => {
+    const { clock, state } = make();
+    die(clock, state);
+    die(clock, state);
+
+    state.toggle('kick', 0);
+    expect(state.arrowCell).toBeNull();
+    // Emptied again before the next run, so the question is back and so is the arrow.
+    state.toggle('kick', 0);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 0 });
+  });
+
+  it('counts per obstacle, so one death each on two of them is not being stuck', () => {
+    const { clock, state } = twoOpenObstacles();
+
+    die(clock, state);
+    expect(state.failure?.step).toBe(4);
+    expect(state.arrowCell).toBeNull();
+
+    // Answering the first pillar carries the run to the second one, which is a different
+    // obstacle with a tally of its own. Two deaths, two stage-side lessons, no arrow.
+    state.toggle('kick', 4);
+    die(clock, state);
+    expect(state.failure?.step).toBe(12);
+    expect(state.arrowCell).toBeNull();
+  });
+
+  it('starts an obstacle over once it has been passed', () => {
+    const { clock, state } = twoOpenObstacles();
+
+    die(clock, state);
+    die(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 4 });
+
+    // Filling the cell answers the arrow; getting past the obstacle clears its tally.
+    state.toggle('kick', 4);
+    expect(state.arrowCell).toBeNull();
+    die(clock, state);
+    expect(state.failure?.step).toBe(12);
+
+    // Breaking it again asks from scratch: the first death back is a first death.
+    state.toggle('kick', 4);
+    die(clock, state);
+    expect(state.failure?.step).toBe(4);
+    expect(state.arrowCell).toBeNull();
+    die(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 4 });
+  });
+
+  it('does not follow the player into the next stage', () => {
+    const { clock, state } = twoOpenObstacles();
+    die(clock, state);
+    die(clock, state);
+    expect(state.arrowCell).toEqual({ instrument: 'kick', step: 4 });
+
+    clearStage(clock, state);
+    expect(state.stageIndex).toBe(3);
+    expect(state.arrowCell).toBeNull();
   });
 });
 

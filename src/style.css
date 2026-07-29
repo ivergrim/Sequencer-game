@@ -226,7 +226,39 @@ body {
  * There is deliberately no failure styling here. Nothing in the sequencer changes
  * appearance when a run fails: the stage's death camera names the obstacle, and working
  * out which step it sits on is the puzzle.
+ *
+ * The stuck arrow is the one mark that ever appears on the grid, and it is not failure
+ * styling: it costs a second failure on the *same* obstacle, it arrives after the camera
+ * rather than with it, and it points at one empty cell instead of colouring the run.
+ *
+ * It is the blackest thing in the sequencer — a placed note is `--ink`, this is
+ * `--ink-strong` — because it is looked for by someone who has just been watching the
+ * stage. The cell it sits in is empty by definition, so it can own the whole of it: one
+ * shape, clipped out of a single box, in the same procedural idiom as the rest of the art.
  */
+.seq-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 11px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  background: var(--ink-strong);
+  clip-path: polygon(36% 0, 64% 0, 64% 52%, 100% 52%, 50% 100%, 0 52%, 36% 52%);
+  pointer-events: none;
+  /* A nudge towards the cell rather than a blink, so the movement points as well. */
+  animation: arrow-nudge 1.15s ease-in-out infinite;
+}
+
+@keyframes arrow-nudge {
+  0%,
+  100% {
+    transform: translate(-50%, calc(-50% - 2px));
+  }
+  50% {
+    transform: translate(-50%, calc(-50% + 2px));
+  }
+}
 
 /*
  * A row does not exist until a stage introduces an obstacle that asks for it.
@@ -537,6 +569,13 @@ kbd {
     inset: 2px 2px;
   }
 
+  /* The cell loses a third of its height here, and the arrow has to stay inside it with
+     room left for the nudge. */
+  .seq-arrow {
+    width: 9px;
+    height: 11px;
+  }
+
   /* Forty-four pixels of button, which is the smallest thing a thumb reliably hits. The
      key chips are already gone on a touch device, so the room comes out of the padding
      rather than out of the target. */
@@ -557,9 +596,12 @@ kbd {
   }
 }
 
+/* The arrow stops nudging and simply sits in its cell: it is doing its job either way,
+   and it is the one thing here that repeats forever. */
 @media (prefers-reduced-motion: reduce) {
   .seq-budget.shake,
   .seq-row.unlocking,
+  .seq-arrow,
   .start-go,
   #run {
     animation-duration: 1ms;
