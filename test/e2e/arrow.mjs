@@ -66,19 +66,21 @@ const arrowAt = () =>
     `"${arrow?.label}"`,
   );
 
-  // It has to be findable and inside the cell it points at, which is the one thing the
-  // unit tests cannot see.
+  // Geometry is the one thing the unit tests cannot see. The arrow stands *above* the
+  // cell and points down into it, so what matters is that it is centred on the cell's
+  // column, clear of the cell itself, and not clipped by anything on the way out.
   const box = await page.evaluate(() => {
     const arrowBox = document.querySelector('.seq-arrow').getBoundingClientRect();
     const cellBox = document.querySelector('.seq-cell[data-hint="true"]').getBoundingClientRect();
+    const seqBox = document.querySelector('#sequencer').getBoundingClientRect();
     return {
       arrow: { w: arrowBox.width, h: arrowBox.height },
-      inside:
-        arrowBox.left >= cellBox.left - 0.5 &&
-        arrowBox.right <= cellBox.right + 0.5 &&
-        arrowBox.top >= cellBox.top - 0.5 &&
-        arrowBox.bottom <= cellBox.bottom + 0.5,
       cell: { w: cellBox.width, h: cellBox.height },
+      // Positive means the arrow's tip is above the cell's top edge.
+      clearance: cellBox.top - arrowBox.bottom,
+      offCentre: Math.abs((arrowBox.left + arrowBox.right) / 2 - (cellBox.left + cellBox.right) / 2),
+      withinSequencer: arrowBox.top >= seqBox.top - 0.5 && arrowBox.bottom <= seqBox.bottom + 0.5,
+      overflowTop: seqBox.top - arrowBox.top,
     };
   });
   check(
@@ -87,10 +89,65 @@ const arrowAt = () =>
     `${box.arrow.w}x${box.arrow.h}`,
   );
   check(
-    'and stays within the cell it points at',
-    box.inside,
-    `arrow ${box.arrow.w}x${box.arrow.h} in cell ${box.cell.w.toFixed(1)}x${box.cell.h.toFixed(1)}`,
+    'it stands above the cell rather than inside it',
+    // The bob dips the tip towards the cell, so allow it to touch but never to sit in it.
+    box.clearance > -2 && box.clearance < 20,
+    `${box.clearance.toFixed(1)}px of clearance over the cell`,
   );
+  check(
+    'and is centred on the cell it points at',
+    // `left: 50%` resolves against the padding box, so the arrow sits half a border
+    // width right of the cell's true centre — 1px on a quarter-note column, which
+    // carries a 2px separator. Invisible on a 55px cell, and not worth compensating for.
+    box.offCentre <= 1.5,
+    `${box.offCentre.toFixed(2)}px off centre`,
+  );
+  // The arrow finds the column; the outline names the cell. Without it, an arrow standing
+  // above a cell in any row but the top one sits in the band of the row above and reads
+  // as pointing at that row instead.
+  const outline = await page.evaluate(() => {
+    const hinted = document.querySelector('.seq-cell[data-hint="true"] .pad');
+    const plain = document.querySelector('.seq-cell:not([data-hint="true"]) .pad');
+    return {
+      hinted: getComputedStyle(hinted).borderTopStyle,
+      plain: getComputedStyle(plain).borderTopStyle,
+    };
+  });
+  check(
+    'the cell it points at is outlined, and only that cell',
+    outline.hinted === 'dashed' && outline.plain === 'solid',
+    `hinted ${outline.hinted}, others ${outline.plain}`,
+  );
+
+  // This one is about the grid no longer clipping its overflow. The arrow on a top-row
+  // cell stands above the grid, and `.seq-head` reserves the room it stands in; if either
+  // of those regresses the arrow gets cut in half and nothing else notices.
+  check(
+    'nothing clips it out of the sequencer',
+    box.withinSequencer,
+    `${box.overflowTop.toFixed(1)}px past the top`,
+  );
+}
+
+// ------------------------------------------------------------------- and it bobs
+{
+  // Movement is what makes it findable in the corner of the eye, so the animation is
+  // load-bearing rather than decoration. Sample the tip across a second and require it
+  // to actually travel.
+  const travel = await page.evaluate(async () => {
+    const arrow = document.querySelector('.seq-arrow');
+    let low = -Infinity;
+    let high = Infinity;
+    const until = performance.now() + 1100;
+    while (performance.now() < until) {
+      const { top } = arrow.getBoundingClientRect();
+      low = Math.max(low, top);
+      high = Math.min(high, top);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return low - high;
+  });
+  check('the arrow bobs up and down', travel > 4, `${travel.toFixed(1)}px of travel`);
 }
 
 // ---------------------------------------------- it is tied to the cell, not dismissed once

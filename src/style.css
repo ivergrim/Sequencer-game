@@ -81,7 +81,10 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0 0 0.6rem;
+  /* The bottom padding is the room the stuck arrow stands in when it points at a cell in
+     the top row. Reserved permanently rather than made when the arrow appears, so the
+     grid never jumps under the player's cursor mid-edit. */
+  padding: 0 0 1.5rem;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -143,8 +146,21 @@ body {
 
 .seq-grid {
   position: relative;
-  overflow: hidden;
+  /*
+   * Deliberately not `overflow: hidden`. The stuck arrow stands above the cell it points
+   * at, and for a cell in the top row that is above the grid — a clip here would cut it
+   * in half. What actually needed clipping was the playhead, which now carries its own
+   * clipping layer.
+   */
   border-top: 1px solid var(--line);
+}
+
+/* Spans the grid exactly, so the playhead's own top/bottom/left/width are unchanged. */
+.seq-playhead-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .seq-row {
@@ -209,6 +225,20 @@ body {
 }
 
 /*
+ * The cell the stuck arrow points at.
+ *
+ * The arrow stands above the cell, which on a grid of one row is above the sequencer and
+ * unmistakable — but on a grid of four it occupies the band of the row above, so the
+ * arrow alone reads as pointing at that row instead. This is what settles it: the arrow
+ * finds the column, the outline names the cell. Dashed rather than filled or coloured,
+ * because it has to say "a note is missing here", and a solid pad is what a placed note
+ * already looks like.
+ */
+.seq-cell[data-hint="true"] .pad {
+  border: 1px dashed var(--ink-strong);
+}
+
+/*
  * A note committed by clearing an earlier stage. Greyed and inert, mirroring the way its
  * obstacle recedes on stage, so each stage asks only about its own new notes.
  */
@@ -236,27 +266,42 @@ body {
  * stage. The cell it sits in is empty by definition, so it can own the whole of it: one
  * shape, clipped out of a single box, in the same procedural idiom as the rest of the art.
  */
+/*
+ * The stuck arrow stands above the cell and points down into it, rather than sitting
+ * inside it.
+ *
+ * Inside the cell it had to fit within 28px alongside the pad, which made it small and
+ * easy to miss — and a mark inside a cell reads as something the cell contains, when the
+ * whole point is that the cell is empty and should not be. Above the cell it is
+ * unambiguously pointing at something rather than being in it, and it has room to be
+ * bigger. For a cell in the top row this puts it above the grid entirely, which is why
+ * `.seq-grid` does not clip and `.seq-head` reserves the space.
+ */
 .seq-arrow {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: 11px;
-  height: 14px;
-  transform: translate(-50%, -50%);
+  bottom: 100%;
+  width: 15px;
+  height: 19px;
   background: var(--ink-strong);
   clip-path: polygon(36% 0, 64% 0, 64% 52%, 100% 52%, 50% 100%, 0 52%, 36% 52%);
   pointer-events: none;
-  /* A nudge towards the cell rather than a blink, so the movement points as well. */
-  animation: arrow-nudge 1.15s ease-in-out infinite;
+  /*
+   * A bob rather than a blink. Movement is what the eye catches in the corner of the
+   * field, and travelling down towards the cell and back means the movement points too.
+   * The whole swing is 8px against a 19px arrow, which is enough to read as motion
+   * across the width of the grid without becoming the loudest thing on the screen.
+   */
+  animation: arrow-bob 0.9s ease-in-out infinite;
 }
 
-@keyframes arrow-nudge {
+@keyframes arrow-bob {
   0%,
   100% {
-    transform: translate(-50%, calc(-50% - 2px));
+    transform: translate(-50%, -7px);
   }
   50% {
-    transform: translate(-50%, calc(-50% + 2px));
+    transform: translate(-50%, 1px);
   }
 }
 
@@ -572,8 +617,8 @@ kbd {
   /* The cell loses a third of its height here, and the arrow has to stay inside it with
      room left for the nudge. */
   .seq-arrow {
-    width: 9px;
-    height: 11px;
+    width: 12px;
+    height: 15px;
   }
 
   /* Forty-four pixels of button, which is the smallest thing a thumb reliably hits. The

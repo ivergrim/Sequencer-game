@@ -362,6 +362,42 @@ Knock-on changes worth knowing about:
   `test/stems.test.ts` checks the gain automation through a stub context instead, which
   tests the actual guarantee and runs in 13ms. Both of its rules were mutation-checked.
 
+## The stuck arrow's placement
+
+User direction after seeing it: "the arrow should be above the sequencer pointing down at
+it. Also make it bob up and down to make it visible for the player." It used to sit
+centred *inside* the target cell at 11×14px with a ±2px nudge.
+
+It now stands above the cell, 15×19px, bobbing 8px every 0.9s. Three things had to move
+with it, and none of them are optional:
+
+- **`.seq-grid` no longer clips its overflow.** An arrow above a top-row cell is above the
+  grid, and the clip cut it in half. The clip existed only for the playhead, which runs
+  past the right edge on the last step — the playhead now sits in its own
+  `.seq-playhead-clip` layer spanning the grid, so its `top/bottom/left/width` are
+  unchanged and nothing else is clipped. Do not put `overflow: hidden` back on the grid.
+- **`.seq-head`'s bottom padding is the room the arrow stands in** (0.6rem → 1.5rem).
+  Reserved permanently rather than made on demand, so the grid never jumps under the
+  player's cursor mid-edit. `#stage` has a fixed height clamp, so this does not move the
+  canvas.
+- **The target cell is outlined dashed** (`.seq-cell[data-hint="true"] .pad`). On a
+  one-row grid "above the cell" and "above the sequencer" are the same place, which is
+  almost certainly the grid the user was looking at. On a four-row grid they are not: the
+  arrow sits in the band of the row *above* its target and, alone, reads as pointing at
+  that row — verified by screenshot at stage 7, where it pointed at rim 15 from inside the
+  clap row. The outline is what disambiguates it. `data-hint` had no styling at all before
+  this, so the arrow was the only cell marker; if the arrow ever moves again, the outline
+  is what stops the hint becoming ambiguous.
+
+Worth re-checking with the user: whether they meant above the *whole grid* rather than
+above the cell. Above the whole grid would point at a column and nothing else, so the
+outline would be doing all the work of naming the cell — which is why it was not chosen,
+but it is a one-rule change if they want it.
+
+`test/e2e/arrow.mjs` pins the clearance over the cell, the centring, the outline, that
+nothing clips it out of the sequencer, and that it actually travels — the animation is
+behaviour here, not decoration.
+
 ## Deviations from the written docs (do not "fix" these back)
 
 - Worker name `sequencer-game`, not `sequencing-runner`.

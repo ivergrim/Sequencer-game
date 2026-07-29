@@ -500,7 +500,27 @@ steps to a position relative to a visible beat. The streak resets when the stage
 so the help never outlives the trouble that earned it.
 
 **Then the grid answers.** After `ARROW_AFTER_FAILURES` (2) failures on *the same
-obstacle*, a black arrow points at the exact cell the missing note belongs in. The first
+obstacle*, a black arrow points at the exact cell the missing note belongs in. It stands
+**above** the cell and bobs down towards it and back, once every 0.9 seconds. Both of
+those are load-bearing. Inside the cell it had to fit into 28px alongside the pad, which
+made it small and easy to miss, and a mark *inside* a cell reads as something the cell
+contains — when the whole point is that the cell is empty and should not be. The bob is
+what makes it findable at all: movement is what the eye catches in the corner of the
+field, and travelling towards the cell and back means the movement points as well.
+
+Standing above the cell puts it above the grid entirely when the target is in the top
+row, so `.seq-grid` no longer clips its overflow — the playhead, which was the only thing
+that ever needed clipping, carries its own clipping layer now, and `.seq-head` reserves
+the room the arrow stands in permanently rather than making it when the arrow appears.
+
+On a grid of one row, above the cell and above the sequencer are the same place. On a
+grid of four they are not: the arrow occupies the band of the row above its target, and
+on its own it would read as pointing at *that* row. So **the target cell is outlined**,
+dashed, in strong ink. The arrow finds the column and the outline names the cell. Dashed
+rather than filled, because it has to say "a note is missing here", and a filled pad is
+what a placed note already looks like.
+
+The first
 death on an obstacle still changes nothing in the sequencer — that one is the game
 working, and the stage-side feedback is the whole of it. The second is a player who has
 looked and not found it, and at that point being told is better than being taught again.

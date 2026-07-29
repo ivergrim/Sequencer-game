@@ -121,9 +121,16 @@ export class SequencerUI {
       this.shownLocked.set(instrument, new Array<boolean>(patternLength).fill(false));
     }
 
+    // The playhead runs past the right edge on the last step, so it has to be clipped.
+    // It gets its own clipping layer rather than the grid clipping everything, because
+    // the stuck arrow stands above the cell it points at and the arrow on a top-row cell
+    // stands above the grid itself — a clip on the grid would cut it in half.
+    const playheadClip = document.createElement('div');
+    playheadClip.className = 'seq-playhead-clip';
     this.playhead = document.createElement('div');
     this.playhead.className = 'seq-playhead';
-    this.grid.append(this.playhead);
+    playheadClip.append(this.playhead);
+    this.grid.append(playheadClip);
 
     // Built once and left detached until a cell earns it. Decorative to a screen reader:
     // the cell it lands on carries the meaning, and it is the cell that gets labelled.
