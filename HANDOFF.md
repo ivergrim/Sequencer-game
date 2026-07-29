@@ -25,8 +25,7 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
 ## Working setup
 
 - **Repo**: `ivergrim/Sequencer-game` on GitHub. Owner: ivergrim (ivergrim@gmail.com).
-- **Branches**: normally **`main` only** — but there is a live exception right now, at
-  the end of this bullet. `main` is the default branch and the one that deploys.
+- **Branches**: **`main` only**, again. It is the default branch and the one that deploys.
   Earlier sessions each developed on a `claude/*` branch and pushed the same commits to
   both, which left a trail of merged duplicates holding nothing; the user deleted all of
   them and consolidated. Work goes to `main`.
@@ -34,12 +33,13 @@ works today; it explains the reasoning behind most of the non-obvious decisions.
     does, treat it as a transient mirror of `main`, not a line of work — push the same
     commits to `main` in the same breath, and expect the user to want the mirror gone
     afterwards. Do not leave one behind and do not open a PR unless asked.
-  - **Live exception: `claude/chapter1-song-structure-dxtazt` is a real line of work, not
-    a mirror.** The chapter 1 rebuild lives there and the user asked for it to stay off
-    `main` — "we will be experimenting a bit so keep it separate". Do **not** mirror it to
-    `main` and do **not** open a PR for it unless they ask. Pushing to `main` is deploying
-    to production and this is not settled work: they want to hear it and iterate. The
-    mirror rule above applies again once they merge or abandon this branch.
+  - `claude/chapter1-song-structure-dxtazt` was a real exception to that for one session:
+    the user wanted the chapter 1 rebuild kept off `main` while they listened to it and
+    iterated. They merged it on 2026-07-29 and the exception is over. The branch is fully
+    contained in `main` now and is the user's to delete (see the next bullet). The pattern
+    is worth remembering: when a change is a matter of taste rather than correctness, they
+    may want it parked on a branch so they can hear or see it before it deploys — ask
+    rather than assume, in either direction.
   - **This environment cannot delete a remote branch**, so cleanup falls to the user:
     the git proxy accepts the connection and then hangs up on any delete-ref push
     (`send-pack: unexpected disconnect`, then `Everything up-to-date`), the GitHub MCP
@@ -468,22 +468,26 @@ behaviour here, not decoration.
 
 ## State at handoff
 
-All 110 unit tests green (80 before, plus the chapter and backing-bed additions);
-`test:e2e`, `test:e2e:patch1` and `test:e2e:responsive` green; build and typecheck clean.
+All 119 unit tests green (80 before, plus the chapter, backing-bed and arrow additions);
+`test:e2e`, `test:e2e:arrow`, `test:e2e:patch1` and `test:e2e:responsive` green; build and
+typecheck clean.
 
-`main` is untouched. The current work is on `claude/chapter1-song-structure-dxtazt` and
-is meant to stay there for now — the chapter 1 rebuild described above.
+The chapter 1 rebuild, the bass rework and the stuck arrow's placement are **merged to
+`main` and therefore deployed**. `claude/chapter1-song-structure-dxtazt` is fully
+contained in `main` and is the user's to delete from the dashboard.
 
-The user has heard the first version ("doesn't sound too bad") and the bass rework came
-out of that feedback; they have not yet heard the rework itself. Mix reference points
-from the playthrough suite: drum bus peaks 1.05, backing bed 0.37, full mix 0.92 after
-the limiter. At stage 1 the bed peaks at 0.147 with 51% of that surviving a 150Hz
-highpass, which is the rough floor of what a laptop speaker reproduces — the old opener
-was a pure 43.65Hz sine and had none.
+Mix reference points from the playthrough suite, useful for judging any future change by
+ear: drum bus peaks 1.05, backing bed 0.37, full mix 0.92 after the limiter. At stage 1
+the bed peaks at 0.147 with 51% of that surviving a 150Hz highpass, which is the rough
+floor of what a laptop speaker reproduces — the old opener was a pure 43.65Hz sine and had
+none of that.
 
-Still unproven by ear, and the likeliest next round: balance between the ten layers, the
-rim's placement on 13 and 15, and whether the crash arriving only at stage 10 is too late
-a reveal for the row.
+The user signed off on the music with "looks good" after the bass rework, so the structure
+is settled. What has never been tuned by ear is the balance *between* the ten backing
+layers; the gains in `stems.ts` were reasoned about rather than listened to. Two open
+questions the user has not been asked yet: whether the rim on 13 and 15 makes the last
+beat too busy, and whether the crash arriving only at stage 10 is too late a reveal for
+its row.
 
 The last session tuned the idle dino that the session before it introduced. Changes:
 the idle character is now composited behind the entire scene using canvas
